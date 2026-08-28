@@ -9,7 +9,7 @@ public interface ISurfaceDriver : IAsyncDisposable
     /// <param name="url">Absolute URL to open.</param>
     Task NavigateAsync(string url);
 
-    /// <summary>Returns a text observation of the current surface (URL, title, visible text).</summary>
+    /// <summary>Returns a compact observation: PAGE (URL, title), VISIBLE TEXT, and INTERACTIVE CONTROLS.</summary>
     /// <returns>A redaction-safe observation string.</returns>
     Task<string> ObserveAsync();
 

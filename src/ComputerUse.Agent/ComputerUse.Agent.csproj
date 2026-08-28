@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <InternalsVisibleTo Include="ComputerUse.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\ComputerUse.Domain\ComputerUse.Domain.csproj" />
     <PackageReference Include="AWSSDK.BedrockRuntime" Version="3.7.412.4" />
   </ItemGroup>

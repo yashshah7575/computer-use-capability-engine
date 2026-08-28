@@ -64,11 +64,12 @@ public class HumanGateTests
     public async Task RunAsync_CompletedByHumanWhenTargetGone_DoesNotClick()
     {
         // Arrange
+        var resumed = false;
         var surface = new FakeSurfaceDriver { CanResolve = false, PageText = "Done" };
         var request = RiskyRequest(surface, _ => Task.FromResult(new HumanGateOutcome
         {
             Decision = HumanGateDecision.CompletedByHuman
-        }));
+        }), () => resumed = true);
 
         // Act
         var actual = await new ReplayEngine().RunAsync(request);
@@ -76,17 +77,19 @@ public class HumanGateTests
         // Assert
         Assert.Equal(ResultKind.Success, actual.Kind);
         Assert.Equal(0, surface.ClickCount);
+        Assert.True(resumed);
     }
 
     [Fact]
     public async Task RunAsync_CompletedByHumanUnverified_RemainsInterventionRequired()
     {
         // Arrange
+        var resumed = false;
         var surface = new FakeSurfaceDriver { CanResolve = true, PageText = "still on confirm" };
         var request = RiskyRequest(surface, _ => Task.FromResult(new HumanGateOutcome
         {
             Decision = HumanGateDecision.CompletedByHuman
-        }));
+        }), () => resumed = true);
 
         // Act
         var actual = await new ReplayEngine().RunAsync(request);
@@ -94,6 +97,7 @@ public class HumanGateTests
         // Assert
         Assert.Equal(ResultKind.InterventionRequired, actual.Kind);
         Assert.Equal(0, surface.ClickCount);
+        Assert.False(resumed);
         Assert.Contains("could not be verified", actual.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -136,7 +140,8 @@ public class HumanGateTests
 
     private static ReplayRequest RiskyRequest(
         FakeSurfaceDriver surface,
-        Func<ArtifactStep, Task<HumanGateOutcome>>? onHumanGate)
+        Func<ArtifactStep, Task<HumanGateOutcome>>? onHumanGate,
+        Action? resumeAutomation = null)
     {
         var artifact = new CapabilityArtifact
         {
@@ -174,7 +179,8 @@ public class HumanGateTests
                 AllowedActions = [Constants.Action.Click, Constants.Action.Checkpoint]
             },
             EvidenceDir = Path.Combine(Path.GetTempPath(), "cu-hitl-" + Guid.NewGuid().ToString("N")),
-            OnHumanGate = onHumanGate
+            OnHumanGate = onHumanGate,
+            ResumeAutomation = resumeAutomation
         };
     }
 }

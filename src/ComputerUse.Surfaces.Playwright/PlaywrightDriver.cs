@@ -37,7 +37,20 @@ public sealed class PlaywrightDriver : ISurfaceDriver
     {
         var title = await Page.TitleAsync();
         var body = await Page.InnerTextAsync(Constants.Selector.Body);
-        return $"URL={Page.Url}\nTITLE={title}\n{body}";
+        var raw = await Page.EvaluateAsync<ControlDto[]>(ControlScanScript) ?? [];
+        var controls = raw.Select(c => new ObservedControl
+        {
+            Tag = c.Tag ?? "",
+            Role = c.Role,
+            Name = c.Name,
+            Text = c.Text,
+            Label = c.Label,
+            Placeholder = c.Placeholder,
+            InputName = c.InputName,
+            Type = c.Type,
+            Href = c.Href
+        }).ToList();
+        return ObservationFormatter.Format(Page.Url, title, Redaction.Redact(body), controls);
     }
 
     public async Task<LocatorMatch> ClickAsync(IReadOnlyList<LocatorSpec> locators)
@@ -144,6 +157,7 @@ public sealed class PlaywrightDriver : ISurfaceDriver
                     Constants.Locator.Role => Page.GetByRole(ParseRole(spec.Role), new() { Name = spec.Name }),
                     Constants.Locator.Text => Page.GetByText(spec.Value ?? spec.Name ?? ""),
                     Constants.Locator.Placeholder => Page.GetByPlaceholder(spec.Value ?? ""),
+                    Constants.Locator.Label => Page.GetByLabel(spec.Value ?? spec.Name ?? ""),
                     _ => Page.Locator(spec.Value ?? Constants.Selector.Body)
                 };
                 await loc.First.WaitForAsync(new() { Timeout = timeoutMs });
@@ -171,8 +185,110 @@ public sealed class PlaywrightDriver : ISurfaceDriver
         throw new InvalidOperationException("All locators failed.", last);
     }
 
-    private static AriaRole ParseRole(string? role) =>
-        Enum.TryParse<AriaRole>(role, true, out var r) ? r : AriaRole.Button;
+    private static AriaRole ParseRole(string? role)
+    {
+        var value = (role ?? "").Trim();
+        if (value.Equals("input", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("textbox", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("searchbox", StringComparison.OrdinalIgnoreCase))
+            return AriaRole.Textbox;
+        if (value.Equals("a", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("link", StringComparison.OrdinalIgnoreCase))
+            return AriaRole.Link;
+        return Enum.TryParse<AriaRole>(value, true, out var parsed) ? parsed : AriaRole.Button;
+    }
+
+    private const string ControlScanScript = """
+        () => {
+          const visible = (el) => {
+            const s = getComputedStyle(el);
+            if (s.display === 'none' || s.visibility === 'hidden' || s.opacity === '0') return false;
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+          };
+          const labelFor = (el) => {
+            if (el.id) {
+              const lab = document.querySelector('label[for="' + el.id.replace(/"/g, '') + '"]');
+              if (lab) return (lab.innerText || '').trim().slice(0, 80);
+            }
+            const wrapped = el.closest('label');
+            if (wrapped) return (wrapped.innerText || '').trim().slice(0, 80);
+            const tag = el.tagName.toLowerCase();
+            if (tag === 'button' || tag === 'a') return '';
+            const cell = el.closest('td,th');
+            const prev = cell && cell.previousElementSibling;
+            if (prev) return (prev.innerText || '').trim().slice(0, 80);
+            return '';
+          };
+          const impliedRole = (el) => {
+            const explicit = el.getAttribute('role');
+            if (explicit) return explicit;
+            const tag = el.tagName.toLowerCase();
+            if (tag === 'button' || el.getAttribute('type') === 'submit') return 'button';
+            if (tag === 'a') return 'link';
+            if (tag === 'input' || tag === 'textarea') return 'textbox';
+            if (tag === 'select') return 'combobox';
+            return '';
+          };
+          return [
+            ...[...document.querySelectorAll('a, button, input, select, textarea')].filter(visible),
+            ...[...document.querySelectorAll('table tr')].filter(tr => {
+              const tds = tr.querySelectorAll('td,th');
+              return tds.length >= 2 && visible(tr);
+            })
+          ]
+            .slice(0, 24)
+            .map(el => {
+              if (el.tagName.toLowerCase() === 'tr') {
+                const tds = [...el.querySelectorAll('td,th')];
+                return {
+                  tag: 'td',
+                  role: 'cell',
+                  name: '',
+                  text: ((tds[tds.length - 1].innerText || '') + '').trim().slice(0, 80),
+                  label: ((tds[0].innerText || '') + '').trim().slice(0, 80),
+                  placeholder: '',
+                  inputName: '',
+                  type: '',
+                  href: ''
+                };
+              }
+              return {
+                tag: el.tagName.toLowerCase(),
+                role: impliedRole(el),
+                name: (el.getAttribute('aria-label') || '').trim(),
+                text: ((el.innerText || el.value || '') + '').trim().slice(0, 80),
+                label: labelFor(el),
+                placeholder: el.getAttribute('placeholder') || '',
+                inputName: el.getAttribute('name') || '',
+                type: el.getAttribute('type') || '',
+                href: el.getAttribute('href') || ''
+              };
+            });
+        }
+        """;
+
+    private sealed class ControlDto
+    {
+        [JsonPropertyName("tag")]
+        public string? Tag { get; set; }
+        [JsonPropertyName("role")]
+        public string? Role { get; set; }
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+        [JsonPropertyName("text")]
+        public string? Text { get; set; }
+        [JsonPropertyName("label")]
+        public string? Label { get; set; }
+        [JsonPropertyName("placeholder")]
+        public string? Placeholder { get; set; }
+        [JsonPropertyName("inputName")]
+        public string? InputName { get; set; }
+        [JsonPropertyName("type")]
+        public string? Type { get; set; }
+        [JsonPropertyName("href")]
+        public string? Href { get; set; }
+    }
 
     private sealed class HumanActionDto
     {

@@ -17,7 +17,7 @@ This repository is an [interface.ai](https://interface.ai) take-home vertical sl
 - **Explicit policy/safety.** Host/port/path/action allowlists; risk classes; RISKY/IRREVERSIBLE steps do not run unattended.
 - **Evidence.** Screenshots, structured `result.json`, and run folders under `/evidence`. Live discovery writes `evidence/discovery/<run-id>/`. `stability` replays N times and writes a pass-rate report.
 - **Human-in-the-loop.** Automation pauses on the same headed browser. The operator page on `:5200` requires an explicit decision: authorize automation, mark the step completed by human, or deny. A stray click on the bank window is audit only — it does not authorize the risky action.
-- **Surface abstraction.** `ISurfaceDriver` is the perceive/act seam. Playwright is the current driver; the artifact schema is not Playwright-specific.
+- **Surface abstraction.** `ISurfaceDriver` is the perceive/act seam. Playwright is the current **web** driver and returns a compact semantic observation (not a DOM dump). The artifact schema is not Playwright-specific.
 
 ## Architecture
 
@@ -38,7 +38,9 @@ flowchart TD
   Hitl --> Replay
 ```
 
-**Discovery path:** natural-language goal → LLM observes and acts on DemoBank → successful actions are recorded → typed **draft** artifact is emitted → review/approve.
+**Discovery path:** natural-language goal → LLM observes DemoBank (page, visible text, semantic interactive controls) and chooses actions from that observation → successful actions are recorded → typed **draft** artifact is emitted → review/approve.
+
+The implemented surface is Playwright/web. `ISurfaceDriver` is the extension seam for other drivers later; screenshot-based and desktop perception are not implemented.
 
 **Production path:** caller → approved capability artifact → deterministic replay (no LLM) → structured result.
 
@@ -90,6 +92,8 @@ Unit tests use an in-memory `FakeSurfaceDriver` (no browser). Integration tests 
 
 ## Quick Start / End-to-End Demo
 
+**Manual walkthrough:** follow [MANUAL-TESTING.md](MANUAL-TESTING.md) step by step (two terminals, expected JSON, HITL). The short version below is the same flow.
+
 Known member: **12345** (savings **1842.50**). Transient: **88888** (first lookup shows a dismissible interruption, then **500.00**). Unknown: **00000**. Default browser is **headed**; add `--headless` if needed.
 
 ### 1. Restore / build
@@ -130,9 +134,11 @@ dotnet run --project src/ComputerUse.Cli -- discover \
   --member-id 12345
 ```
 
-Expected: a **draft** artifact whose steps match the actions the model actually took, plus evidence under `evidence/discovery/<run-id>/` (`discovery.jsonl`, `obs-*.txt`, `artifact.json`, `result.json`). Inspect that directory, sanitize if needed, then commit it if you want a genuine discovery run in the repo. No Bedrock run is committed by default.
+Expected **if the model finishes the flow**: a **draft** artifact plus `evidence/discovery/<run-id>/` (`discovery.jsonl`, `obs-*.txt`, `artifact.json`, `result.json`).
 
-A previously committed lookup artifact still exists for replay demos; replace it with the draft from live discovery after you review it, then `approve` if you will replay RISKY steps.
+If discovery does **not** finish (locator misses, max steps, incomplete schema), the command fails, `artifacts/lookup-savings-balance.json` stays the previous fixture, and replay/HITL demos below still use that fixture. Start DemoBank (`dotnet run --project src/DemoBank`) before this command or you will get `ERR_CONNECTION_REFUSED`.
+
+A successful live run writes `evidence/discovery/<run-id>/` (gitignored) and a **draft** artifact. Replay does not call Bedrock. `dotnet run --project src/ComputerUse.Cli -- approve --artifact artifacts/lookup-savings-balance.json` if you want `approved`.
 
 ### 4. Replay the saved capability (no LLM)
 
@@ -180,9 +186,9 @@ dotnet run --project src/ComputerUse.Cli -- hitl --url http://127.0.0.1:5100
 ```
 
 1. Headed Chromium stays on DemoBank (confirm page).
-2. Open http://127.0.0.1:5200 (operator page — includes a screenshot).
+2. Open http://127.0.0.1:5200 in a **normal** browser (not that Chromium). The three decision buttons are **above** the screenshot.
 3. Choose one explicit action: **Authorize automation to perform this step**, **I completed the step**, or **Deny / stop**.
-4. Clicks in the bank window are audited; they do not by themselves authorize the irreversible action.
+4. Clicks in the bank window are audited; they do not by themselves authorize the irreversible action. The screenshot on `:5200` is a picture — do not click “Open sub-account” there.
 
 ![Operator HITL page](evidence/handoff/08-operator-hitl.png)
 

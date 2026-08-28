@@ -1,9 +1,0 @@
-{
-  "kind": "BusinessOutcome",
-  "message": "Member not found.",
-  "stepId": "open-member",
-  "expected": "member record",
-  "observed": "Record not found",
-  "outputs": {},
-  "evidenceDir": "/Users/yashshah/Documents/GitHub/TakeHomeProject_InterfaceAI/evidence/replay-20260827032919"
-}

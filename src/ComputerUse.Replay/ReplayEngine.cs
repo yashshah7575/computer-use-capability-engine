@@ -118,6 +118,7 @@ public sealed class ReplayEngine : IReplayEngine
                                 });
                             }
 
+                            request.ResumeAutomation?.Invoke();
                             break;
                         }
 

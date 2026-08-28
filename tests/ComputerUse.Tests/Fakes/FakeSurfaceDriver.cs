@@ -9,9 +9,13 @@ internal sealed class FakeSurfaceDriver : ISurfaceDriver
 {
     public string CurrentUrl { get; set; } = Constants.Network.DemoBankUrl + "/";
     public string PageText { get; set; } = "";
+    public string? Observation { get; set; }
+    public string? ObservationAfterType { get; set; }
+    public string? ExtractText { get; set; }
     public bool ThrowOnAct { get; set; }
     public LocatorMatch ActMatch { get; set; } = new() { MatchedIndex = 0, MatchCount = 1 };
     public bool CanResolve { get; set; } = true;
+    private bool _typed;
 
     public Task NavigateAsync(string url)
     {
@@ -19,8 +23,12 @@ internal sealed class FakeSurfaceDriver : ISurfaceDriver
         return Task.CompletedTask;
     }
 
-    public Task<string> ObserveAsync() =>
-        Task.FromResult($"URL={CurrentUrl}\n{PageText}");
+    public Task<string> ObserveAsync()
+    {
+        if (_typed && ObservationAfterType is not null)
+            return Task.FromResult(ObservationAfterType);
+        return Task.FromResult(Observation ?? $"URL={CurrentUrl}\n{PageText}");
+    }
 
     public int ClickCount { get; private set; }
 
@@ -30,10 +38,14 @@ internal sealed class FakeSurfaceDriver : ISurfaceDriver
         return ActAsync();
     }
 
-    public Task<LocatorMatch> TypeAsync(IReadOnlyList<LocatorSpec> locators, string text) => ActAsync();
+    public Task<LocatorMatch> TypeAsync(IReadOnlyList<LocatorSpec> locators, string text)
+    {
+        _typed = true;
+        return ActAsync();
+    }
 
     public Task<ExtractResult> ExtractAsync(IReadOnlyList<LocatorSpec> locators) =>
-        Task.FromResult(new ExtractResult { Text = PageText, Match = ActMatch });
+        Task.FromResult(new ExtractResult { Text = ExtractText ?? PageText, Match = ActMatch });
 
     public Task<bool> CanResolveAsync(IReadOnlyList<LocatorSpec> locators) =>
         Task.FromResult(CanResolve);

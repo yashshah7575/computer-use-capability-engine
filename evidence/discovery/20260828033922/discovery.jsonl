@@ -1,0 +1,42 @@
+{"step":"0","event":"run_started","goal":"Look up member 12345 and return the current savings balance","baseUrl":"http://127.0.0.1:5100"}
+{"step":"0","event":"action_succeeded","tool":"navigate"}
+{"step":"0","event":"observation","file":"obs-00.txt"}
+{"step":"0","event":"model_decision","tool":"type","parameter":"memberId","extractName":null,"css":null,"role":"textbox","name":"Member number","text":null,"label":null}
+{"step":"0","event":"action_started","tool":"type","locatorStrategies":"role,css,label","coercedFrom":null}
+{"step":"0","event":"action_succeeded","tool":"type","locatorStrategies":"role,css,label","status":"success"}
+{"step":"1","event":"observation","file":"obs-01.txt"}
+{"step":"1","event":"model_decision","tool":"click","parameter":null,"extractName":null,"css":null,"role":"button","name":"Lookup","text":"Lookup","label":null}
+{"step":"1","event":"action_started","tool":"click","locatorStrategies":"role,text","coercedFrom":null}
+{"step":"1","event":"action_succeeded","tool":"click","locatorStrategies":"role,text","status":"success"}
+{"step":"2","event":"observation","file":"obs-02.txt"}
+{"step":"2","event":"model_decision","tool":"click","parameter":null,"extractName":null,"css":null,"role":"link","name":null,"text":"Doe, Jane","label":null}
+{"step":"2","event":"action_started","tool":"click","locatorStrategies":"role,text","coercedFrom":null}
+{"step":"2","event":"action_succeeded","tool":"click","locatorStrategies":"role,text","status":"success"}
+{"step":"3","event":"observation","file":"obs-03.txt"}
+{"step":"3","event":"model_decision","tool":"extract","parameter":null,"extractName":"balance","css":"td[label=\u0027Savings\u0027]","role":null,"name":null,"text":null,"label":null}
+{"step":"3","event":"action_started","tool":"extract","locatorStrategies":"css,css","coercedFrom":null}
+{"step":"3","event":"extract","extractName":"balance","outputType":"decimal"}
+{"step":"3","event":"action_succeeded","tool":"extract","locatorStrategies":"css,css","status":"success"}
+{"step":"4","event":"observation","file":"obs-04.txt"}
+{"step":"4","event":"action_failed","reason":"unparseable model response. Reply with one JSON object."}
+{"step":"5","event":"observation","file":"obs-05.txt"}
+{"step":"5","event":"model_decision","tool":"extract","parameter":null,"extractName":"balance","css":"td[label=\u0027Savings\u0027]","role":null,"name":null,"text":null,"label":null}
+{"step":"5","event":"action_started","tool":"extract","locatorStrategies":"css,css","coercedFrom":null}
+{"step":"5","event":"extract","extractName":"balance","outputType":"decimal"}
+{"step":"5","event":"action_succeeded","tool":"extract","locatorStrategies":"css,css","status":"success"}
+{"step":"6","event":"observation","file":"obs-06.txt"}
+{"step":"6","event":"model_decision","tool":"extract","parameter":null,"extractName":"balance","css":"td[label=\u0027Savings\u0027]","role":null,"name":null,"text":null,"label":null}
+{"step":"6","event":"action_started","tool":"extract","locatorStrategies":"css,css","coercedFrom":null}
+{"step":"6","event":"extract","extractName":"balance","outputType":"decimal"}
+{"step":"6","event":"action_succeeded","tool":"extract","locatorStrategies":"css,css","status":"success"}
+{"step":"7","event":"observation","file":"obs-07.txt"}
+{"step":"7","event":"model_decision","tool":"checkpoint","parameter":null,"extractName":null,"css":null,"role":null,"name":null,"text":null,"label":null}
+{"step":"7","event":"action_started","tool":"checkpoint","locatorStrategies":"","coercedFrom":null}
+{"step":"7","event":"action_failed","tool":"checkpoint","reason":"checkpoint text was not observed."}
+{"step":"8","event":"observation","file":"obs-08.txt"}
+{"step":"8","event":"model_decision","tool":"checkpoint","parameter":null,"extractName":null,"css":null,"role":null,"name":null,"text":null,"label":null}
+{"step":"8","event":"action_started","tool":"checkpoint","locatorStrategies":"","coercedFrom":null}
+{"step":"8","event":"checkpoint","textContains":"Member record"}
+{"step":"8","event":"action_succeeded","tool":"checkpoint","locatorStrategies":"","status":"success"}
+{"step":"8","event":"artifact_emitted","id":"lookup-savings-balance","steps":"8","approvalState":"draft"}
+{"step":"8","event":"run_completed","status":"success"}

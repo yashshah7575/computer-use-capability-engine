@@ -1,0 +1,27 @@
+PAGE
+URL: http://127.0.0.1:5100/lookup?memberno=12345
+TITLE: Search results
+
+VISIBLE TEXT
+Search results
+ID	Name
+12345	Doe, Jane
+
+CONTROLS
+[0]
+tag=a
+role=link
+text=Doe, Jane
+href=/member?id=12345
+
+[1]
+tag=td
+role=cell
+text=Name
+label=ID
+
+[2]
+tag=td
+role=cell
+text=Doe, Jane
+label=12345

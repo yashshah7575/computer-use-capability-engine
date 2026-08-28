@@ -1,0 +1,30 @@
+PAGE
+URL: http://127.0.0.1:5100/member?id=12345
+TITLE: Member record
+
+VISIBLE TEXT
+Member record
+Member record
+Name	Doe, Jane
+Savings	1842.50
+
+Open sub-account
+
+CONTROLS
+[0]
+tag=a
+role=link
+text=Open sub-account
+href=/subaccount?id=12345
+
+[1]
+tag=td
+role=cell
+text=Doe, Jane
+label=Name
+
+[2]
+tag=td
+role=cell
+text=1842.50
+label=Savings

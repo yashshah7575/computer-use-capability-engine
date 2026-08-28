@@ -28,6 +28,7 @@ public class HandoffHostTests
         // Assert
         Assert.True(response.IsSuccessStatusCode);
         Assert.Equal(HumanGateDecision.AuthorizeAutomation, actual.Decision);
+        Assert.Equal(ControllerKind.Automation, host.Controller);
     }
 
     [Fact]
@@ -50,6 +51,7 @@ public class HandoffHostTests
         // Assert
         Assert.True(response.IsSuccessStatusCode);
         Assert.Equal(HumanGateDecision.Denied, actual.Decision);
+        Assert.Equal(ControllerKind.Human, host.Controller);
         Assert.Single(actual.Actions);
     }
 
@@ -73,5 +75,31 @@ public class HandoffHostTests
         Assert.Equal(HttpStatusCode.NotFound, actual.StatusCode);
         await client.PostAsync(Constants.Route.Deny, new StringContent(""));
         await wait;
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task WaitForHumanAsync_CompletedByHuman_LeavesControllerHumanUntilResume()
+    {
+        // Arrange
+        await using var host = new HandoffHost();
+        await host.StartAsync(Constants.Network.TestOperatorPortCompleted);
+        var wait = host.WaitForHumanAsync(
+            new InterventionRequest { RunId = "t", StepId = Constants.StepId.Confirm, Reason = "test" },
+            () => Task.FromResult<IReadOnlyList<HumanAction>>([]));
+        using var client = new HttpClient
+        {
+            BaseAddress = new Uri(Constants.Network.LoopbackUrl(Constants.Network.TestOperatorPortCompleted))
+        };
+
+        // Act
+        await client.PostAsync(Constants.Route.Completed, new StringContent(""));
+        var actual = await wait;
+
+        // Assert
+        Assert.Equal(HumanGateDecision.CompletedByHuman, actual.Decision);
+        Assert.Equal(ControllerKind.Human, host.Controller);
+        host.ResumeAutomation();
+        Assert.Equal(ControllerKind.Automation, host.Controller);
     }
 }

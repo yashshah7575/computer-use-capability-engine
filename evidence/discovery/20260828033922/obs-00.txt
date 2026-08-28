@@ -1,0 +1,34 @@
+PAGE
+URL: http://127.0.0.1:5100/
+TITLE: Member lookup
+
+VISIBLE TEXT
+Member lookup
+Institution	Demo Credit Union (synthetic)
+Member number	
+ Lookup
+
+CONTROLS
+[0]
+tag=input
+role=textbox
+label=Member number
+nameAttr=memberno
+
+[1]
+tag=button
+role=button
+text=Lookup
+type=submit
+
+[2]
+tag=td
+role=cell
+text=Demo Credit Union (synthetic)
+label=Institution
+
+[3]
+tag=td
+role=cell
+text=Lookup
+label=Member number

@@ -9,11 +9,16 @@ namespace ComputerUse.Agent;
 internal sealed class DiscoveryRecorder
 {
     private readonly DiscoveryContext _context;
+    private readonly DiscoverySpecification _spec;
     private readonly List<ArtifactStep> _steps = [];
     private readonly List<TypedField> _outputs = [];
     private int _index;
 
-    public DiscoveryRecorder(DiscoveryContext context) => _context = context;
+    public DiscoveryRecorder(DiscoveryContext context, DiscoverySpecification? spec = null)
+    {
+        _context = context;
+        _spec = spec ?? DiscoverySpecification.LookupSavingsBalance;
+    }
 
     public IReadOnlyList<ArtifactStep> Steps => _steps;
 
@@ -34,6 +39,10 @@ internal sealed class DiscoveryRecorder
             step.Id = NextId(step.Action);
         if (string.IsNullOrWhiteSpace(step.Risk))
             step.Risk = RiskFor(step.Action);
+        if (step.Action == Constants.Action.Extract &&
+            _steps.LastOrDefault() is { Action: Constants.Action.Extract } prev &&
+            string.Equals(prev.ExtractName, step.ExtractName, StringComparison.OrdinalIgnoreCase))
+            return;
         _steps.Add(step);
     }
 
@@ -47,14 +56,10 @@ internal sealed class DiscoveryRecorder
     public string PersistTypeValue(ModelAction action)
     {
         var parameter = action.Parameter?.Trim();
-        if (!string.IsNullOrEmpty(parameter))
-        {
-            if (!DiscoveryContext.SupportedParameters.Contains(parameter))
-                throw new InvalidOperationException($"Unsupported discovery parameter '{parameter}'.");
+        if (!string.IsNullOrEmpty(parameter) && DiscoveryContext.SupportedParameters.Contains(parameter))
             return "{{" + parameter + "}}";
-        }
 
-        var concrete = action.Value ?? action.Text ?? "";
+        var concrete = ConcreteTypeValue(action);
         foreach (var kv in _context.KnownInputs)
         {
             if (concrete.Equals(kv.Value, StringComparison.Ordinal))
@@ -70,6 +75,9 @@ internal sealed class DiscoveryRecorder
         if (!string.IsNullOrEmpty(parameter) &&
             _context.KnownInputs.TryGetValue(parameter, out var known))
             return known;
+        if (!string.IsNullOrEmpty(parameter) &&
+            !DiscoveryContext.SupportedParameters.Contains(parameter))
+            return parameter;
         if (!string.IsNullOrEmpty(action.Value))
             return action.Value;
         return action.Text ?? "";
@@ -82,14 +90,8 @@ internal sealed class DiscoveryRecorder
     {
         if (!_steps.Any(s => s.Action is Constants.Action.Click or Constants.Action.Type or Constants.Action.Extract))
             throw new InvalidOperationException("Discovery produced no meaningful recorded actions.");
-        if (!_steps.Any(s => s.Action == Constants.Action.Checkpoint))
+        if (_spec.RequireCheckpoint && !_steps.Any(s => s.Action == Constants.Action.Checkpoint))
             throw new InvalidOperationException("Discovery cannot emit an artifact without a recorded checkpoint.");
-        foreach (var output in _outputs)
-        {
-            if (!_steps.Any(s => s.Action == Constants.Action.Extract &&
-                                 string.Equals(s.ExtractName, output.Name, StringComparison.OrdinalIgnoreCase)))
-                throw new InvalidOperationException($"Declared output '{output.Name}' has no extract step.");
-        }
 
         var inputs = new List<TypedField>
         {
@@ -97,6 +99,25 @@ internal sealed class DiscoveryRecorder
         };
         if (_steps.Any(s => s.Value == Constants.Template.MemberId))
             inputs.Insert(0, new() { Name = Constants.Field.MemberId, Type = Constants.Field.StringType });
+
+        foreach (var required in _spec.RequiredInputs)
+        {
+            if (!inputs.Any(i => i.Name.Equals(required, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException($"Discovery completed without required input '{required}'.");
+        }
+
+        foreach (var required in _spec.RequiredOutputs)
+        {
+            if (!_outputs.Any(o => o.Name.Equals(required, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException($"Discovery completed without required output '{required}'.");
+            if (!_steps.Any(s => s.Action == Constants.Action.Extract &&
+                                 string.Equals(s.ExtractName, required, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException($"Discovery completed without required output '{required}'.");
+        }
+
+        if (_outputs.Any(o => o.Name.Equals(Constants.Field.Balance, StringComparison.OrdinalIgnoreCase) &&
+                              !o.Type.Equals(Constants.Field.DecimalType, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException($"Discovery completed without required output '{Constants.Field.Balance}'.");
 
         return new CapabilityArtifact
         {
@@ -111,6 +132,20 @@ internal sealed class DiscoveryRecorder
             RecoverableConditions = DemoBankEnvironmentKnowledge.RecoverableConditions(),
             Steps = [.. _steps]
         };
+    }
+
+    public bool TryEmit(out CapabilityArtifact artifact)
+    {
+        try
+        {
+            artifact = Emit();
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            artifact = null!;
+            return false;
+        }
     }
 
     private string NextId(string action)

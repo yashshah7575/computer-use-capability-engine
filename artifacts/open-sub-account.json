@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1.0.0",
-  "id": "lookup-savings-balance",
-  "description": "Look up member 12345 and return the current savings balance",
+  "id": "open-sub-account",
+  "description": "Start opening a sub-account (risky confirm).",
   "artifactVersion": 1,
-  "approvalState": "draft",
+  "approvalState": "approved",
   "inputs": [
     {
       "name": "memberId",
@@ -14,12 +14,7 @@
       "type": "string"
     }
   ],
-  "outputs": [
-    {
-      "name": "balance",
-      "type": "decimal"
-    }
-  ],
+  "outputs": [],
   "knownOutcomes": [
     {
       "code": "MEMBER_NOT_FOUND",
@@ -45,7 +40,7 @@
   ],
   "steps": [
     {
-      "id": "disc-01-navigate",
+      "id": "open-home",
       "action": "navigate",
       "url": "{{baseUrl}}/",
       "value": null,
@@ -55,7 +50,7 @@
       "locators": []
     },
     {
-      "id": "disc-02-type",
+      "id": "type-id",
       "action": "type",
       "url": null,
       "value": "{{memberId}}",
@@ -64,33 +59,21 @@
       "risk": "REVERSIBLE",
       "locators": [
         {
-          "strategy": "role",
-          "role": "textbox",
-          "name": "Member number",
-          "value": null
-        },
-        {
           "strategy": "css",
           "role": null,
           "name": null,
           "value": "input[name=memberno]"
-        },
-        {
-          "strategy": "label",
-          "role": null,
-          "name": null,
-          "value": "Member number"
         }
       ]
     },
     {
-      "id": "disc-03-click",
+      "id": "submit",
       "action": "click",
       "url": null,
       "value": null,
       "extractName": null,
       "textContains": null,
-      "risk": "READ_ONLY",
+      "risk": "REVERSIBLE",
       "locators": [
         {
           "strategy": "role",
@@ -107,7 +90,7 @@
       ]
     },
     {
-      "id": "disc-04-click",
+      "id": "open-member",
       "action": "click",
       "url": null,
       "value": null,
@@ -116,90 +99,15 @@
       "risk": "READ_ONLY",
       "locators": [
         {
-          "strategy": "role",
-          "role": "link",
-          "name": "Doe, Jane",
-          "value": null
-        },
-        {
-          "strategy": "text",
+          "strategy": "css",
           "role": null,
           "name": null,
-          "value": "Doe, Jane"
+          "value": "table a"
         }
       ]
     },
     {
-      "id": "disc-05-extract",
-      "action": "extract",
-      "url": null,
-      "value": null,
-      "extractName": "balance",
-      "textContains": null,
-      "risk": "READ_ONLY",
-      "locators": [
-        {
-          "strategy": "css",
-          "role": null,
-          "name": null,
-          "value": "td[label=\u0027Savings\u0027]"
-        },
-        {
-          "strategy": "css",
-          "role": null,
-          "name": null,
-          "value": "td:has-text(\u0022Savings\u0022) \u002B td"
-        }
-      ]
-    },
-    {
-      "id": "disc-06-extract",
-      "action": "extract",
-      "url": null,
-      "value": null,
-      "extractName": "balance",
-      "textContains": null,
-      "risk": "READ_ONLY",
-      "locators": [
-        {
-          "strategy": "css",
-          "role": null,
-          "name": null,
-          "value": "td[label=\u0027Savings\u0027]"
-        },
-        {
-          "strategy": "css",
-          "role": null,
-          "name": null,
-          "value": "td:has-text(\u0022Savings\u0022) \u002B td"
-        }
-      ]
-    },
-    {
-      "id": "disc-07-extract",
-      "action": "extract",
-      "url": null,
-      "value": null,
-      "extractName": "balance",
-      "textContains": null,
-      "risk": "READ_ONLY",
-      "locators": [
-        {
-          "strategy": "css",
-          "role": null,
-          "name": null,
-          "value": "td[label=\u0027Savings\u0027]"
-        },
-        {
-          "strategy": "css",
-          "role": null,
-          "name": null,
-          "value": "td:has-text(\u0022Savings\u0022) \u002B td"
-        }
-      ]
-    },
-    {
-      "id": "disc-08-checkpoint",
+      "id": "checkpoint-member",
       "action": "checkpoint",
       "url": null,
       "value": null,
@@ -207,6 +115,57 @@
       "textContains": "Member record",
       "risk": "READ_ONLY",
       "locators": []
+    },
+    {
+      "id": "extract-balance",
+      "action": "extract",
+      "url": null,
+      "value": null,
+      "extractName": "balance",
+      "textContains": null,
+      "risk": "READ_ONLY",
+      "locators": [
+        {
+          "strategy": "css",
+          "role": null,
+          "name": null,
+          "value": "h2 \u002B table tr:nth-child(2) td:nth-child(2)"
+        }
+      ]
+    },
+    {
+      "id": "open-sub",
+      "action": "click",
+      "url": null,
+      "value": null,
+      "extractName": null,
+      "textContains": null,
+      "risk": "RISKY",
+      "locators": [
+        {
+          "strategy": "text",
+          "role": null,
+          "name": null,
+          "value": "Open sub-account"
+        }
+      ]
+    },
+    {
+      "id": "confirm",
+      "action": "click",
+      "url": null,
+      "value": null,
+      "extractName": null,
+      "textContains": null,
+      "risk": "IRREVERSIBLE",
+      "locators": [
+        {
+          "strategy": "text",
+          "role": null,
+          "name": null,
+          "value": "Confirm open sub-account"
+        }
+      ]
     }
   ]
 }

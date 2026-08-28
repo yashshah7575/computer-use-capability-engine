@@ -31,10 +31,10 @@ public static class DemoBankApp
             <table border="1" cellpadding="6" cellspacing="0">
               <tr><td>Institution</td><td>Demo Credit Union (synthetic)</td></tr>
               <tr>
-                <td>Member number</td>
+                <td><label for="memberno">Member number</label></td>
                 <td>
                   <form method="get" action="/lookup">
-                    <input name="memberno" size="16" />
+                    <input id="memberno" name="memberno" size="16" />
                     <button type="submit">{Constants.Ui.Lookup}</button>
                   </form>
                 </td>

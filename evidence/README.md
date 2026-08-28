@@ -4,8 +4,8 @@ Sanitized captures from representative DemoBank runs. Nothing here is fabricated
 
 | Folder | Contents |
 | --- | --- |
-| `discovery/` | Walkthrough screenshots of the DemoBank surface (not a live Bedrock transcript) |
-| `replay-success/` | Successful balance replay (`result.json` runs + walkthrough PNG/JSON) |
+| `discovery/` | Walkthrough screenshots (`01-*.png` …). Timestamped live Bedrock folders are gitignored. |
+| `replay-success/` | Successful balance replay walkthrough PNG/JSON |
 | `replay-business-outcome/` | Member-not-found runs, plus simulated hard-failure capture |
 | `replay-recoverable/` | Transient interruption (member 88888) dismissed then completed |
 | `stability/` | Multi-run pass-rate report |
@@ -19,16 +19,20 @@ Genuine LLM discovery writes:
 
 Typical files:
 
-- `discovery.jsonl` — one sanitized event per observation / model decision / action
-- `obs-00.txt`, `obs-01.txt`, … — redacted surface observations
+- `discovery.jsonl` — one sanitized event per observation / model decision / action / checkpoint / extract
+- `obs-00.txt`, `obs-01.txt`, … — redacted observations (page, visible text, semantic controls)
 - `artifact.json` — draft capability recorded from successful actions
 - `result.json` — discovery summary
 - `failure.png` — only if the run failed
 
+A genuine discovery run should be enough to trace:
+
+observation → model decision → action → checkpoint/extract → generated artifact
+
 `--scripted` does **not** produce this trail; it only writes the fixture artifact.
 
-This repository does **not** currently commit a genuine Bedrock discovery directory. After you run live `discover` locally, inspect `evidence/discovery/<run-id>/`, confirm it is sanitized (no credentials, tokens, or unrestricted transcripts), then commit **that** directory if you want reviewers to see a real discovery trace.
+Successful live Bedrock discovery writes `evidence/discovery/<run-id>/` (gitignored) and overwrites `artifacts/lookup-savings-balance.json` as a **draft**. Replay of that draft does not need Bedrock. Timestamped folders are gitignored; `git add -f` a sanitized `evidence/discovery/<run-id>/` if you want the trace in git.
 
-Replay/stability/HITL CLI runs still write timestamped directories under `evidence/` (for example `evidence/replay-…`). `evidence/runs/` is gitignored for local clutter.
+Replay/stability/HITL CLI runs still write timestamped directories under `evidence/` (for example `evidence/replay-…`). Those folders are gitignored.
 
 Capability JSON used as **input** to replay remains at `/artifacts/lookup-savings-balance.json` until you replace it with a reviewed discovery draft.

@@ -117,7 +117,8 @@ async Task<int> Replay()
                 ScreenshotPath = shot
             }, driver.PeekHumanAuditAsync);
             return outcome;
-        }
+        },
+        ResumeAutomation = () => handoff.ResumeAutomation()
     });
 
     Console.WriteLine(JsonSerializer.Serialize(result, ArtifactSerializer.JsonOptions));

@@ -22,6 +22,10 @@ playwright/.cache
 # Transient local runs (keep committed evidence/ categories)
 evidence/runs/
 evidence/demo-captures/
+evidence/replay-20*/
+evidence/**/replay-20*/
+evidence/discovery/20*/
+evidence/stability/stability-20*/
 *.log
 
 # Assignment brief — do not submit

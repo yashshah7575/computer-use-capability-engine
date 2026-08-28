@@ -46,4 +46,20 @@
 
 ---
 
+## Documentation — manual testing runbook
+**Timestamp**: 2026-08-28T03:14:00Z
+**User Input**: "Lets remove all evidences of test and create manual testing run book, tell me what to do step by step"
+**AI Response**: Deleted timestamped local CLI evidence (replay-*, discovery/20*, nested replay-* under category folders, stability-*). Kept curated walkthrough screenshots. Wrote MANUAL-TESTING.md. Gitignored future timestamped runs. Moved HITL decision buttons above the operator screenshot. Updated README, evidence/README, REPORT.
+**Context**: Documentation-only cleanup; skipped reverse engineering, user stories, and design gates.
+
+---
+
+## Construction — discovery locator/progress defect
+**Timestamp**: 2026-08-28T03:41:00Z
+**User Input**: "What failed ... If you want a successful live discovery, the next change is to make locator use and “type then click Lookup” more reliable for Nova Lite, then re-run this command. I can do that next. => Fix defect"
+**AI Response**: Fixed discovery progress for Nova Lite: observation locators from nameAttr, refuse re-type when filled, coerce premature extract/checkpoint on results to the unique member link, map parameter=12345 to memberId, emit draft when checkpoint+balance exist without requiring the model to say finish. Live Bedrock discover succeeded (evidence/discovery/20260828033922); replay of the draft returned Success 1842.50 and MEMBER_NOT_FOUND for 00000.
+**Context**: Defect fix + verified live Bedrock discovery
+
+---
+
 

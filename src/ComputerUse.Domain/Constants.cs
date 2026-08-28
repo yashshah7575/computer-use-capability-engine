@@ -48,6 +48,7 @@ public static class Constants
         public const string Role = "role";
         public const string Text = "text";
         public const string Placeholder = "placeholder";
+        public const string Label = "label";
         public const string Default = "default";
     }
 
@@ -140,6 +141,7 @@ public static class Constants
         public const string Role = "role";
         public const string Name = "name";
         public const string Placeholder = "placeholder";
+        public const string Label = "label";
         public const string Url = "url";
     }
 
@@ -175,6 +177,7 @@ public static class Constants
         public const int TestOperatorPort = 18765;
         public const int TestOperatorPortAlt = 18766;
         public const int TestOperatorPortResume = 18767;
+        public const int TestOperatorPortCompleted = 18768;
         public const int CaptureDemoOperatorPort = 5201;
 
         public static string LoopbackUrl(int port) => $"http://{Loopback}:{port}";

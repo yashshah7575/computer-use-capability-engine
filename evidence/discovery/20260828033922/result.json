@@ -1,0 +1,12 @@
+{
+  "kind": "Success",
+  "message": "Discovery emitted draft artifact.",
+  "stepId": null,
+  "expected": null,
+  "observed": null,
+  "outputs": {},
+  "degradations": [],
+  "recoveryEvents": [],
+  "humanActions": [],
+  "evidenceDir": "/Users/yashshah/Documents/GitHub/computer-use-capability-engine/evidence/discovery/20260828033922"
+}

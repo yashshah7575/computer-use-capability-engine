@@ -71,11 +71,13 @@ public sealed class HandoffHost : IAsyncDisposable
             actions = await _peekActions();
         _accepted = new HumanGateOutcome { Decision = decision, Actions = actions.ToList() };
         _resumeMessage = null;
-        if (decision != HumanGateDecision.Denied)
-            Controller = ControllerKind.Automation;
+        if (decision == HumanGateDecision.AuthorizeAutomation)
+            ResumeAutomation();
         _resume.TrySetResult(_accepted);
         return Results.Redirect("/");
     }
+
+    public void ResumeAutomation() => Controller = ControllerKind.Automation;
 
     private async Task<string> HtmlAsync()
     {
@@ -105,12 +107,12 @@ public sealed class HandoffHost : IAsyncDisposable
             <p>Step: {r?.StepId}</p>
             <p>Reason: {r?.Reason}</p>
             {refused}
-            {shot}
-            <p>Use the already-open DemoBank browser if you will complete the step yourself. Then choose one explicit decision:</p>
+            <p><strong>Choose one explicit decision.</strong> The picture below is a screenshot, not the live bank. Use the already-open Chromium DemoBank window for bank clicks.</p>
             {audit}
             <form method="post" action="{Constants.Route.Authorize}"><button type="submit">Authorize automation to perform this step</button></form>
             <form method="post" action="{Constants.Route.Completed}"><button type="submit">I completed the step</button></form>
             <form method="post" action="{Constants.Route.Deny}"><button type="submit">Deny / stop</button></form>
+            {shot}
             </body></html>
             """;
     }

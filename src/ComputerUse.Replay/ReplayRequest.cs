@@ -14,5 +14,6 @@ public sealed class ReplayRequest
     public required string EvidenceDir { get; init; }
     public bool SimulateLocatorFailure { get; init; }
     public Func<ArtifactStep, Task<HumanGateOutcome>>? OnHumanGate { get; init; }
+    public Action? ResumeAutomation { get; init; }
     public bool AllowDraft { get; init; }
 }

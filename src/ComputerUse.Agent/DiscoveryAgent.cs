@@ -49,6 +49,8 @@ public sealed class DiscoveryAgent
             ["tool"] = Constants.Action.Navigate
         });
 
+        string? lastOutcome = "navigate succeeded. Observe CONTROLS and type the member id, then click submit.";
+
         for (var i = 0; i < maxSteps; i++)
         {
             var obs = Redaction.Redact(await surface.ObserveAsync());
@@ -56,13 +58,14 @@ public sealed class DiscoveryAgent
             await File.WriteAllTextAsync(Path.Combine(evidenceDir, obsFile), obs);
             log.Write(i, Constants.DiscoveryEvent.Observation, new Dictionary<string, string?> { ["file"] = obsFile });
 
-            var text = await _model.CompleteAsync(BuildPrompt(context.Goal, obs));
+            var text = await _model.CompleteAsync(DiscoveryPrompt.Build(context.Goal, obs, lastOutcome));
             var action = ModelActionParser.TryParse(text);
             if (action is null)
             {
+                lastOutcome = "unparseable model response. Reply with one JSON object.";
                 log.Write(i, Constants.DiscoveryEvent.ActionFailed, new Dictionary<string, string?>
                 {
-                    ["reason"] = "unparseable model response"
+                    ["reason"] = lastOutcome
                 });
                 continue;
             }
@@ -71,57 +74,96 @@ public sealed class DiscoveryAgent
             {
                 ["tool"] = action.Tool,
                 ["parameter"] = action.Parameter,
-                ["extractName"] = action.ExtractName
+                ["extractName"] = action.ExtractName,
+                ["css"] = action.Css,
+                ["role"] = action.Role,
+                ["name"] = action.Name,
+                ["text"] = action.Text,
+                ["label"] = action.Label
             });
 
             if (action.Tool == Constants.Action.Finish)
             {
-                var artifact = recorder.Emit();
-                log.Write(i, Constants.DiscoveryEvent.ArtifactEmitted, new Dictionary<string, string?>
+                if (recorder.TryEmit(out var finished))
+                    return Complete(log, i, finished);
+                lastOutcome = "finish rejected until checkpoint and balance extract are recorded.";
+                log.Write(i, Constants.DiscoveryEvent.ActionFailed, new Dictionary<string, string?>
                 {
-                    ["id"] = artifact.Id,
-                    ["steps"] = artifact.Steps.Count.ToString(),
-                    ["approvalState"] = artifact.ApprovalState
+                    ["tool"] = action.Tool,
+                    ["reason"] = lastOutcome
                 });
-                log.Write(i, Constants.DiscoveryEvent.RunCompleted, new Dictionary<string, string?>
-                {
-                    ["status"] = "success"
-                });
-                return artifact;
+                continue;
             }
 
             try
             {
-                await ExecuteAndRecordAsync(action, i, context, surface, allowlist, recorder, log);
+                var executed = await ExecuteAndRecordAsync(action, i, context, obs, surface, allowlist, recorder, log);
+                lastOutcome = NextHint(recorder, executed);
+                if (recorder.TryEmit(out var complete))
+                    return Complete(log, i, complete);
             }
             catch (Exception ex)
             {
+                lastOutcome = Redaction.Redact(ex.Message);
                 log.Write(i, Constants.DiscoveryEvent.ActionFailed, new Dictionary<string, string?>
                 {
                     ["tool"] = action.Tool,
-                    ["reason"] = Redaction.Redact(ex.Message)
+                    ["reason"] = lastOutcome
                 });
             }
         }
 
+        if (recorder.TryEmit(out var fallback))
+            return Complete(log, maxSteps, fallback);
+
         throw new InvalidOperationException("Discovery did not finish with a valid recorded artifact.");
     }
 
-    private static async Task ExecuteAndRecordAsync(
+    private static CapabilityArtifact Complete(DiscoveryEvidenceLog log, int step, CapabilityArtifact artifact)
+    {
+        log.Write(step, Constants.DiscoveryEvent.ArtifactEmitted, new Dictionary<string, string?>
+        {
+            ["id"] = artifact.Id,
+            ["steps"] = artifact.Steps.Count.ToString(),
+            ["approvalState"] = artifact.ApprovalState
+        });
+        log.Write(step, Constants.DiscoveryEvent.RunCompleted, new Dictionary<string, string?>
+        {
+            ["status"] = "success"
+        });
+        return artifact;
+    }
+
+    private static async Task<string> ExecuteAndRecordAsync(
         ModelAction action,
         int step,
         DiscoveryContext context,
+        string observation,
         ISurfaceDriver surface,
         AllowlistConfig allowlist,
         DiscoveryRecorder recorder,
         DiscoveryEvidenceLog log)
     {
-        var loc = ModelActionParser.Locators(action);
+        if (action.Tool == Constants.Action.Type && LocatorEnricher.MemberFieldAlreadyFilled(observation, context))
+            throw new InvalidOperationException(
+                "The member textbox already has a value. Click the submit/search button from CONTROLS.");
+
+        var hint = LocatorEnricher.ProgressHint(observation, action);
+        if (hint is not null && LocatorEnricher.MaybeCoerce(action, observation).Tool == action.Tool)
+            throw new InvalidOperationException(hint);
+
+        var originalTool = action.Tool;
+        var coerced = LocatorEnricher.MaybeCoerce(action, observation);
+        if (coerced.Tool != action.Tool)
+            action = coerced;
+
+        var loc = LocatorEnricher.For(action, observation);
         var strategies = string.Join(",", loc.Select(l => l.Strategy));
         log.Write(step, Constants.DiscoveryEvent.ActionStarted, new Dictionary<string, string?>
         {
             ["tool"] = action.Tool,
-            ["locatorStrategies"] = strategies
+            ["locatorStrategies"] = strategies,
+            ["coercedFrom"] = originalTool == action.Tool ? null : originalTool
         });
 
         Uri? uri = null;
@@ -182,8 +224,12 @@ public sealed class DiscoveryAgent
                 var name = string.IsNullOrWhiteSpace(action.ExtractName)
                     ? Constants.Field.Balance
                     : action.ExtractName.Trim();
-                var type = NormalizeOutputType(action.OutputType);
-                await surface.ExtractAsync(loc);
+                var type = NormalizeOutputType(action.OutputType, name);
+                var extracted = await surface.ExtractAsync(loc);
+                loc = ModelActionParser.StableExtractLocators(loc, extracted.Text);
+                if (loc.Count == 0)
+                    throw new InvalidOperationException(
+                        "extract locator must not depend on the extracted runtime value.");
                 recorder.RecordOutput(name, type);
                 recorder.Record(new ArtifactStep
                 {
@@ -199,6 +245,9 @@ public sealed class DiscoveryAgent
                 });
                 break;
             case Constants.Action.Checkpoint:
+                if (recorder.Steps.Any(s => s.Action == Constants.Action.Checkpoint))
+                    throw new InvalidOperationException(
+                        "A checkpoint is already recorded. Reply {\"tool\":\"finish\"} now.");
                 var needle = action.TextContains ?? action.Text;
                 if (string.IsNullOrWhiteSpace(needle))
                     throw new InvalidOperationException("checkpoint requires textContains.");
@@ -225,6 +274,24 @@ public sealed class DiscoveryAgent
             ["locatorStrategies"] = strategies,
             ["status"] = "success"
         });
+        return action.Tool;
+    }
+
+    private static string NextHint(DiscoveryRecorder recorder, string executed)
+    {
+        var hasCheckpoint = recorder.Steps.Any(s => s.Action == Constants.Action.Checkpoint);
+        var hasBalance = recorder.Steps.Any(s =>
+            s.Action == Constants.Action.Extract &&
+            string.Equals(s.ExtractName, Constants.Field.Balance, StringComparison.OrdinalIgnoreCase));
+        if (hasCheckpoint && hasBalance)
+            return "Required checkpoint and balance extract are recorded. Reply with {\"tool\":\"finish\"} only. Do not checkpoint again.";
+        if (executed == Constants.Action.Type)
+            return "type succeeded. Next tool must be click on the submit/search button from CONTROLS. Do not type again.";
+        if (executed == Constants.Action.Extract && !hasCheckpoint)
+            return "extract succeeded. Record a checkpoint with visible success text, then finish.";
+        if (executed == Constants.Action.Checkpoint && !hasBalance)
+            return "checkpoint succeeded. Extract savings as extractName=balance, then finish.";
+        return executed + " succeeded.";
     }
 
     private static string ResolveNavigateUrl(ModelAction action, DiscoveryContext context)
@@ -238,22 +305,14 @@ public sealed class DiscoveryAgent
         return uri.ToString();
     }
 
-    private static string NormalizeOutputType(string? type)
+    private static string NormalizeOutputType(string? type, string name)
     {
+        if (name.Equals(Constants.Field.Balance, StringComparison.OrdinalIgnoreCase))
+            return Constants.Field.DecimalType;
         if (string.Equals(type, Constants.Field.DecimalType, StringComparison.OrdinalIgnoreCase))
             return Constants.Field.DecimalType;
         return Constants.Field.StringType;
     }
-
-    private static string BuildPrompt(string goal, string observation) =>
-        "You operate a bank back-office UI. Goal: " + goal + "\nObservation:\n" + observation +
-        "\nReply with ONE JSON object only. Tools: navigate, click, type, extract, checkpoint, finish." +
-        "\nExamples: {\"tool\":\"type\",\"css\":\"input[name=memberno]\",\"value\":\"12345\",\"parameter\":\"memberId\"}" +
-        " {\"tool\":\"click\",\"text\":\"Lookup\",\"css\":\"button\"}" +
-        " {\"tool\":\"checkpoint\",\"textContains\":\"Member record\"}" +
-        " {\"tool\":\"extract\",\"css\":\"td\",\"extractName\":\"balance\",\"outputType\":\"decimal\"}" +
-        " {\"tool\":\"finish\"}." +
-        " Use parameter only for memberId or baseUrl. Do not invent other parameter names.";
 
     /// <summary>
     /// Deterministic fixture/reference artifact for tests, <c>--scripted</c> demos, and offline replay.
