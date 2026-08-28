@@ -1,0 +1,14 @@
+{
+  "kind": "Success",
+  "message": "Replay succeeded.",
+  "stepId": null,
+  "expected": null,
+  "observed": null,
+  "outputs": {
+    "balance": "1842.50"
+  },
+  "degradations": [],
+  "recoveryEvents": [],
+  "humanActions": [],
+  "evidenceDir": "/Users/yashshah/Documents/GitHub/computer-use-capability-engine/evidence/stability-20260828013917/run-02"
+}

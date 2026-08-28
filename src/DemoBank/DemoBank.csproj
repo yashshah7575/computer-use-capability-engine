@@ -2,4 +2,7 @@
   <PropertyGroup>
     <RootNamespace>DemoBank</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ComputerUse.Domain\ComputerUse.Domain.csproj" />
+  </ItemGroup>
 </Project>

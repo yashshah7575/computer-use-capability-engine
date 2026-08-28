@@ -3,6 +3,7 @@
   "id": "lookup-savings-balance",
   "description": "Look up a member by ID and extract current savings balance.",
   "artifactVersion": 1,
+  "approvalState": "approved",
   "inputs": [
     {
       "name": "memberId",
@@ -19,30 +20,42 @@
       "type": "decimal"
     }
   ],
+  "knownOutcomes": [
+    {
+      "code": "MEMBER_NOT_FOUND",
+      "textContains": "Record not found"
+    }
+  ],
+  "recoverableConditions": [
+    {
+      "code": "TRANSIENT_INTERRUPTION",
+      "textContains": "Service interruption",
+      "action": "dismiss",
+      "maxRetries": 1,
+      "locators": [
+        {
+          "strategy": "text",
+          "value": "Dismiss"
+        }
+      ]
+    }
+  ],
   "steps": [
     {
       "id": "open-home",
       "action": "navigate",
       "url": "{{baseUrl}}/",
-      "value": null,
-      "extractName": null,
-      "textContains": null,
       "risk": "READ_ONLY",
       "locators": []
     },
     {
       "id": "type-id",
       "action": "type",
-      "url": null,
       "value": "{{memberId}}",
-      "extractName": null,
-      "textContains": null,
       "risk": "REVERSIBLE",
       "locators": [
         {
           "strategy": "css",
-          "role": null,
-          "name": null,
           "value": "input[name=memberno]"
         }
       ]
@@ -50,22 +63,15 @@
     {
       "id": "submit",
       "action": "click",
-      "url": null,
-      "value": null,
-      "extractName": null,
-      "textContains": null,
       "risk": "REVERSIBLE",
       "locators": [
         {
           "strategy": "role",
           "role": "button",
-          "name": "Lookup",
-          "value": null
+          "name": "Lookup"
         },
         {
           "strategy": "text",
-          "role": null,
-          "name": null,
           "value": "Lookup"
         }
       ]
@@ -73,16 +79,10 @@
     {
       "id": "open-member",
       "action": "click",
-      "url": null,
-      "value": null,
-      "extractName": null,
-      "textContains": null,
       "risk": "READ_ONLY",
       "locators": [
         {
           "strategy": "css",
-          "role": null,
-          "name": null,
           "value": "table a"
         }
       ]
@@ -90,9 +90,6 @@
     {
       "id": "checkpoint-member",
       "action": "checkpoint",
-      "url": null,
-      "value": null,
-      "extractName": null,
       "textContains": "Member record",
       "risk": "READ_ONLY",
       "locators": []
@@ -100,17 +97,12 @@
     {
       "id": "extract-balance",
       "action": "extract",
-      "url": null,
-      "value": null,
       "extractName": "balance",
-      "textContains": null,
       "risk": "READ_ONLY",
       "locators": [
         {
           "strategy": "css",
-          "role": null,
-          "name": null,
-          "value": "h2 \u002B table tr:nth-child(2) td:nth-child(2)"
+          "value": "h2 + table tr:nth-child(2) td:nth-child(2)"
         }
       ]
     }

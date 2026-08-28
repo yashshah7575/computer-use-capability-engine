@@ -7,6 +7,8 @@ Sanitized captures from representative DemoBank runs. Nothing here is fabricated
 | `discovery/` | DemoBank surface screenshots (home, search results, member record) |
 | `replay-success/` | Successful balance replay (`result.json` runs + walkthrough PNG/JSON) |
 | `replay-business-outcome/` | Member-not-found runs, plus simulated hard-failure capture |
+| `replay-recoverable/` | Transient interruption (member 88888) dismissed then completed |
+| `stability/` | Multi-run pass-rate report |
 | `handoff/` | Sub-account confirm and operator HITL screenshots |
 
 New CLI executions still write timestamped directories directly under `evidence/` (for example `evidence/replay-…`, `evidence/discovery-…`). `evidence/runs/` is gitignored for local clutter.

@@ -1,28 +1,25 @@
 using System.Text.Json;
-using Amazon;
-using Amazon.BedrockRuntime;
-using Amazon.BedrockRuntime.Model;
 using ComputerUse.Domain;
-using ComputerUse.Surfaces.Playwright;
 
 namespace ComputerUse.Agent;
 
 public sealed class DiscoveryAgent
 {
+    private readonly ILanguageModel _model;
+
+    public DiscoveryAgent(ILanguageModel model) =>
+        _model = model ?? throw new ArgumentNullException(nameof(model));
+
     public async Task<CapabilityArtifact> DiscoverAsync(
         string goal,
         string baseUrl,
         ISurfaceDriver surface,
         AllowlistConfig allowlist,
         string evidenceDir,
-        int maxSteps = 16)
+        int maxSteps = Constants.Timing.DefaultMaxDiscoverySteps)
     {
         Directory.CreateDirectory(evidenceDir);
         await surface.NavigateAsync(baseUrl.TrimEnd('/') + "/");
-
-        var model = Environment.GetEnvironmentVariable("BEDROCK_MODEL_ID") ?? "amazon.nova-lite-v1:0";
-        var region = Environment.GetEnvironmentVariable("AWS_REGION") ?? "us-east-1";
-        var client = new AmazonBedrockRuntimeClient(RegionEndpoint.GetBySystemName(region));
         var outputs = new Dictionary<string, string>();
 
         for (var i = 0; i < maxSteps; i++)
@@ -33,104 +30,115 @@ public sealed class DiscoveryAgent
                 "You operate a bank back-office UI. Goal: " + goal + "\nObservation:\n" + obs +
                 "\nReply with ONE JSON object only, e.g. {\"tool\":\"click\",\"css\":\"...\",\"text\":\"...\"} or {\"tool\":\"finish\"}.";
 
-            var resp = await client.ConverseAsync(new ConverseRequest
-            {
-                ModelId = model,
-                Messages =
-                [
-                    new Message
-                    {
-                        Role = ConversationRole.User,
-                        Content = [new ContentBlock { Text = prompt }]
-                    }
-                ]
-            });
-
-            var text = string.Join("", resp.Output.Message.Content.Select(c => c.Text)).Trim();
+            var text = await _model.CompleteAsync(prompt);
             var start = text.IndexOf('{');
             var end = text.LastIndexOf('}');
             if (start < 0 || end <= start)
                 continue;
             using var doc = JsonDocument.Parse(text[start..(end + 1)]);
             var root = doc.RootElement;
-            var tool = root.GetProperty("tool").GetString();
-            var css = root.TryGetProperty("css", out var c) ? c.GetString() ?? "" : "";
-            var t = root.TryGetProperty("text", out var tx) ? tx.GetString() ?? "" : "";
+            var tool = root.GetProperty(Constants.Llm.Tool).GetString();
+            var css = root.TryGetProperty(Constants.Llm.Css, out var c) ? c.GetString() ?? "" : "";
+            var t = root.TryGetProperty(Constants.Llm.Text, out var tx) ? tx.GetString() ?? "" : "";
             var loc = new List<LocatorSpec>();
-            if (!string.IsNullOrEmpty(root.TryGetProperty("text", out var t2) ? t2.GetString() : null)
-                && tool == "click")
-                loc.Add(new LocatorSpec { Strategy = "text", Value = t });
+            if (!string.IsNullOrEmpty(root.TryGetProperty(Constants.Llm.Text, out var t2) ? t2.GetString() : null)
+                && tool == Constants.Action.Click)
+                loc.Add(new LocatorSpec { Strategy = Constants.Locator.Text, Value = t });
             if (css.Length > 0)
-                loc.Add(new LocatorSpec { Strategy = "css", Value = css });
+                loc.Add(new LocatorSpec { Strategy = Constants.Locator.Css, Value = css });
 
-            var denied = PolicyEngine.CheckAction(allowlist, tool == "finish" ? "extract" : tool ?? "click",
+            var denied = PolicyEngine.CheckAction(
+                allowlist,
+                tool == Constants.Action.Finish ? Constants.Action.Extract : tool ?? Constants.Action.Click,
                 new Uri(await surface.UrlAsync()));
-            if (denied is not null && tool != "finish")
+            if (denied is not null && tool != Constants.Action.Finish)
                 throw new InvalidOperationException(denied.Message);
 
             switch (tool)
             {
-                case "click":
+                case Constants.Action.Click:
                     await surface.ClickAsync(loc);
                     break;
-                case "type":
+                case Constants.Action.Type:
                     await surface.TypeAsync(loc, t);
                     break;
-                case "extract":
-                    outputs["balance"] = await surface.ExtractAsync(loc);
+                case Constants.Action.Extract:
+                    outputs[Constants.Field.Balance] = (await surface.ExtractAsync(loc)).Text;
                     break;
-                case "finish":
-                    return ScriptedLookup(baseUrl);
+                case Constants.Action.Finish:
+                    var draft = ScriptedLookup(baseUrl);
+                    draft.ApprovalState = Constants.Approval.Draft;
+                    return draft;
             }
         }
 
         if (outputs.Count > 0)
-            return ScriptedLookup(baseUrl);
+        {
+            var partial = ScriptedLookup(baseUrl);
+            partial.ApprovalState = Constants.Approval.Draft;
+            return partial;
+        }
         throw new InvalidOperationException("Discovery did not finish.");
     }
 
     public static CapabilityArtifact ScriptedLookup(string _) => new()
     {
-        SchemaVersion = "1.0.0",
-        Id = "lookup-savings-balance",
+        SchemaVersion = Constants.Schema.Version,
+        Id = Constants.ArtifactId.LookupSavingsBalance,
         Description = "Look up a member by ID and extract current savings balance.",
         ArtifactVersion = 1,
+        ApprovalState = Constants.Approval.Approved,
         Inputs =
         [
-            new() { Name = "memberId", Type = "string" },
-            new() { Name = "baseUrl", Type = "string" }
+            new() { Name = Constants.Field.MemberId, Type = Constants.Field.StringType },
+            new() { Name = Constants.Field.BaseUrl, Type = Constants.Field.StringType }
         ],
-        Outputs = [new() { Name = "balance", Type = "decimal" }],
-        Steps =
+        Outputs = [new() { Name = Constants.Field.Balance, Type = Constants.Field.DecimalType }],
+        KnownOutcomes =
         [
-            new() { Id = "open-home", Action = "navigate", Url = "{{baseUrl}}/", Risk = "READ_ONLY" },
+            new() { Code = Constants.Outcome.MemberNotFound, TextContains = Constants.Outcome.MemberNotFoundText }
+        ],
+        RecoverableConditions =
+        [
             new()
             {
-                Id = "type-id", Action = "type", Value = "{{memberId}}", Risk = "REVERSIBLE",
-                Locators = [new() { Strategy = "css", Value = "input[name=memberno]" }]
+                Code = Constants.Outcome.TransientInterruption,
+                TextContains = Constants.Outcome.InterruptionText,
+                Action = Constants.Recovery.Dismiss,
+                MaxRetries = 1,
+                Locators = [new() { Strategy = Constants.Locator.Text, Value = Constants.Ui.Dismiss }]
+            }
+        ],
+        Steps =
+        [
+            new() { Id = Constants.StepId.OpenHome, Action = Constants.Action.Navigate, Url = Constants.Template.BaseUrlRoot, Risk = Constants.Risk.ReadOnly },
+            new()
+            {
+                Id = Constants.StepId.TypeId, Action = Constants.Action.Type, Value = Constants.Template.MemberId, Risk = Constants.Risk.Reversible,
+                Locators = [new() { Strategy = Constants.Locator.Css, Value = Constants.Selector.MemberNumberInput }]
             },
             new()
             {
-                Id = "submit", Action = "click", Risk = "REVERSIBLE",
+                Id = Constants.StepId.Submit, Action = Constants.Action.Click, Risk = Constants.Risk.Reversible,
                 Locators =
                 [
-                    new() { Strategy = "role", Role = "button", Name = "Lookup" },
-                    new() { Strategy = "text", Value = "Lookup" }
+                    new() { Strategy = Constants.Locator.Role, Role = Constants.Ui.ButtonRole, Name = Constants.Ui.Lookup },
+                    new() { Strategy = Constants.Locator.Text, Value = Constants.Ui.Lookup }
                 ]
             },
             new()
             {
-                Id = "open-member", Action = "click", Risk = "READ_ONLY",
-                Locators = [new() { Strategy = "css", Value = "table a" }]
+                Id = Constants.StepId.OpenMember, Action = Constants.Action.Click, Risk = Constants.Risk.ReadOnly,
+                Locators = [new() { Strategy = Constants.Locator.Css, Value = Constants.Selector.TableLink }]
             },
             new()
             {
-                Id = "checkpoint-member", Action = "checkpoint", TextContains = "Member record", Risk = "READ_ONLY"
+                Id = Constants.StepId.CheckpointMember, Action = Constants.Action.Checkpoint, TextContains = Constants.Ui.MemberRecord, Risk = Constants.Risk.ReadOnly
             },
             new()
             {
-                Id = "extract-balance", Action = "extract", ExtractName = "balance", Risk = "READ_ONLY",
-                Locators = [new() { Strategy = "css", Value = "h2 + table tr:nth-child(2) td:nth-child(2)" }]
+                Id = Constants.StepId.ExtractBalance, Action = Constants.Action.Extract, ExtractName = Constants.Field.Balance, Risk = Constants.Risk.ReadOnly,
+                Locators = [new() { Strategy = Constants.Locator.Css, Value = Constants.Selector.SavingsCell }]
             }
         ]
     };
@@ -138,22 +146,22 @@ public sealed class DiscoveryAgent
     public static CapabilityArtifact ScriptedSubAccount()
     {
         var a = ScriptedLookup("");
-        a.Id = "open-sub-account";
+        a.Id = Constants.ArtifactId.OpenSubAccount;
         a.Description = "Start opening a sub-account (risky confirm).";
         a.Outputs = [];
         a.Steps.Add(new ArtifactStep
         {
-            Id = "open-sub",
-            Action = "click",
-            Risk = "RISKY",
-            Locators = [new() { Strategy = "text", Value = "Open sub-account" }]
+            Id = Constants.StepId.OpenSub,
+            Action = Constants.Action.Click,
+            Risk = Constants.Risk.Risky,
+            Locators = [new() { Strategy = Constants.Locator.Text, Value = Constants.Ui.OpenSubAccount }]
         });
         a.Steps.Add(new ArtifactStep
         {
-            Id = "confirm",
-            Action = "click",
-            Risk = "IRREVERSIBLE",
-            Locators = [new() { Strategy = "text", Value = "Confirm open sub-account" }]
+            Id = Constants.StepId.Confirm,
+            Action = Constants.Action.Click,
+            Risk = Constants.Risk.Irreversible,
+            Locators = [new() { Strategy = Constants.Locator.Text, Value = Constants.Ui.ConfirmOpenSubAccount }]
         });
         return a;
     }

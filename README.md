@@ -10,11 +10,13 @@ This repository is an [interface.ai](https://interface.ai) take-home vertical sl
 
 - **LLM used during discovery, not production replay.** The model explores the UI once. Later invocations follow the saved artifact.
 - **Typed, versioned capability artifacts.** Steps, locators, inputs, and outputs are data — not a model transcript.
-- **Deterministic replay.** No LLM in the replay loop: parameter substitution, allowlist checks, locator fallbacks, checkpoints.
-- **Business outcomes vs system failures.** “Member not found” is `BusinessOutcome`. A locator miss is `HardFailure`.
+- **Deterministic replay.** No LLM in the replay loop: parameter substitution, allowlist checks, locator fallbacks (logged as `degradations` when a lower tier wins), checkpoints.
+- **Business outcomes vs system failures.** Declared `knownOutcomes` on the artifact (e.g. `MEMBER_NOT_FOUND`) are `BusinessOutcome`. A locator miss is `HardFailure`.
+- **Recoverable interruptions.** A known interstitial (DemoBank member **88888**) is dismissed and replayed; the result is `Recoverable` with outputs.
+- **Approval gating.** Live discovery writes `draft`. RISKY/IRREVERSIBLE replay requires `approved` unless `--allow-draft`.
 - **Explicit policy/safety.** Host/port/path/action allowlists; risk classes; RISKY/IRREVERSIBLE steps do not run unattended.
-- **Evidence.** Screenshots, structured `result.json`, and run folders under `/evidence`.
-- **Human-in-the-loop.** Automation pauses on the same headed browser; an operator page on `:5200` resumes control.
+- **Evidence.** Screenshots, structured `result.json`, and run folders under `/evidence`. `stability` replays N times and writes a pass-rate report.
+- **Human-in-the-loop.** Automation pauses on the same headed browser; an operator page on `:5200` shows the screenshot. Resume is refused (HTTP 409) until the human acts on the live session. Human actions are recorded on the result.
 - **Surface abstraction.** `ISurfaceDriver` is the perceive/act seam. Playwright is the current driver; the artifact schema is not Playwright-specific.
 
 ## Architecture
@@ -32,7 +34,7 @@ flowchart TD
   Hitl --> Replay
 ```
 
-`ComputerUse.Cli` hosts discovery, replay, policy, artifacts, evidence, and HITL in one process. DemoBank is a separate app (`:5100`). Operator UI is loopback Kestrel (`:5200`).
+`ComputerUse.Cli` hosts discovery, replay, policy, artifacts, evidence, and HITL in one process. DemoBank is a separate app (`:5100`). Operator UI is loopback Kestrel (`:5200`). Replay and discovery depend on `ISurfaceDriver` in Domain; Playwright is an adapter.
 
 ## Repository Structure
 
@@ -71,7 +73,7 @@ Without live AWS: use `--scripted` discovery and `dotnet test`. Replay still nee
 
 ## Quick Start / End-to-End Demo
 
-Known member: **12345** (savings **1842.50**). Unknown: **00000**. Default browser is **headed**; add `--headless` if needed.
+Known member: **12345** (savings **1842.50**). Transient: **88888** (first lookup shows a dismissible interruption, then **500.00**). Unknown: **00000**. Default browser is **headed**; add `--headless` if needed.
 
 ### 1. Restore / build
 
@@ -126,9 +128,17 @@ Expected: `"kind": "Success"`, `"balance": "1842.50"`.
 dotnet run --project src/ComputerUse.Cli -- replay --member-id 00000 --url http://127.0.0.1:5100
 ```
 
-Expected: `"kind": "BusinessOutcome"`, not a crash.
+Expected: `"kind": "BusinessOutcome"`, `"message": "MEMBER_NOT_FOUND"`, not a crash.
 
 ![Record not found](evidence/replay-business-outcome/05-not-found.png)
+
+Recoverable interstitial (member **88888**):
+
+```bash
+dotnet run --project src/ComputerUse.Cli -- replay --member-id 88888 --url http://127.0.0.1:5100 --headless
+```
+
+Expected: `"kind": "Recoverable"`, `"balance": "500.00"`, plus `recoveryEvents`.
 
 Simulated locator miss (hard failure):
 
@@ -145,13 +155,29 @@ dotnet run --project src/ComputerUse.Cli -- hitl --url http://127.0.0.1:5100
 ```
 
 1. Headed Chromium stays on DemoBank (confirm page).
-2. Open http://127.0.0.1:5200 (operator page).
-3. Inspect or complete the confirm step in the bank window.
+2. Open http://127.0.0.1:5200 (operator page — includes a screenshot).
+3. Click or type **at least once** in the bank window (empty resume is refused).
 4. Click **Resume automation**.
 
 ![Operator HITL page](evidence/handoff/08-operator-hitl.png)
 
 To recapture walkthrough screenshots: `dotnet run --project src/ComputerUse.Cli -- capture-demo --url http://127.0.0.1:5100` (writes under `evidence/demo-captures/`).
+
+### 7. Approve and stability
+
+Live discovery writes `approvalState: draft`. Promote a file in place:
+
+```bash
+dotnet run --project src/ComputerUse.Cli -- approve --artifact artifacts/lookup-savings-balance.json
+```
+
+RISKY/IRREVERSIBLE replay (the `hitl` flow) requires `approved` unless you pass `--allow-draft`.
+
+Replay the lookup N times and write `evidence/stability-*/report.json` (headless by default; `--headed` to watch). A committed sample is at [`evidence/stability/report.json`](evidence/stability/report.json).
+
+```bash
+dotnet run --project src/ComputerUse.Cli -- stability --runs 5 --member-id 12345 --url http://127.0.0.1:5100
+```
 
 ## Evidence
 

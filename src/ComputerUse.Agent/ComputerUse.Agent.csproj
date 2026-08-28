@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\ComputerUse.Domain\ComputerUse.Domain.csproj" />
-    <ProjectReference Include="..\ComputerUse.Surfaces.Playwright\ComputerUse.Surfaces.Playwright.csproj" />
     <PackageReference Include="AWSSDK.BedrockRuntime" Version="3.7.412.4" />
   </ItemGroup>
 </Project>
