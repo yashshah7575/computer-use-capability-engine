@@ -1,0 +1,7 @@
+{
+  "kind": "HardFailure",
+  "message": "Simulated locator failure.",
+  "stepId": "type-id",
+  "expected": "control resolved",
+  "observed": "InvalidOperationException"
+}

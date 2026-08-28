@@ -1,0 +1,29 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+.idea/
+.DS_Store
+
+# Local / secrets
+.env
+.env.*
+appsettings.Local.json
+appsettings.*.local.json
+docker-compose.override.yml
+credentials
+*.pem
+.aws/
+
+# Browser / session
+playwright/.cache
+
+# Transient local runs (keep committed evidence/ categories)
+evidence/runs/
+evidence/demo-captures/
+*.log
+
+# Assignment brief — do not submit
+*.pdf
+Assignment — Computer-Use Automation System.pdf

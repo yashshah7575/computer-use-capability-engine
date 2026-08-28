@@ -1,0 +1,7 @@
+{
+  "kind": "Success",
+  "message": "Replay succeeded.",
+  "outputs": {
+    "balance": "1842.50"
+  }
+}

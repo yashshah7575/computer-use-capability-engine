@@ -1,0 +1,11 @@
+{
+  "kind": 0,
+  "message": "Replay succeeded.",
+  "stepId": null,
+  "expected": null,
+  "observed": null,
+  "outputs": {
+    "balance": "1842.50"
+  },
+  "evidenceDir": "/Users/yashshah/Documents/GitHub/TakeHomeProject_InterfaceAI/evidence/replay-20260827032449"
+}

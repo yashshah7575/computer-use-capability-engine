@@ -1,0 +1,7 @@
+{
+  "allowedHosts": [ "127.0.0.1", "localhost" ],
+  "allowedPorts": [ 5100 ],
+  "allowedPathPrefixes": [ "/", "/lookup", "/member", "/subaccount" ],
+  "allowedActions": [ "navigate", "click", "type", "extract", "checkpoint", "wait" ],
+  "prohibitedPathPrefixes": [ "/admin", "/internal" ]
+}

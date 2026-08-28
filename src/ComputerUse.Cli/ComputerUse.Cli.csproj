@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ComputerUse.Cli</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ComputerUse.Domain\ComputerUse.Domain.csproj" />
+    <ProjectReference Include="..\ComputerUse.Agent\ComputerUse.Agent.csproj" />
+    <ProjectReference Include="..\ComputerUse.Replay\ComputerUse.Replay.csproj" />
+    <ProjectReference Include="..\ComputerUse.Surfaces.Playwright\ComputerUse.Surfaces.Playwright.csproj" />
+    <ProjectReference Include="..\ComputerUse.Handoff\ComputerUse.Handoff.csproj" />
+  </ItemGroup>
+</Project>

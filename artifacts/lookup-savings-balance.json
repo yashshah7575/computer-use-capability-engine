@@ -1,0 +1,118 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "lookup-savings-balance",
+  "description": "Look up a member by ID and extract current savings balance.",
+  "artifactVersion": 1,
+  "inputs": [
+    {
+      "name": "memberId",
+      "type": "string"
+    },
+    {
+      "name": "baseUrl",
+      "type": "string"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "balance",
+      "type": "decimal"
+    }
+  ],
+  "steps": [
+    {
+      "id": "open-home",
+      "action": "navigate",
+      "url": "{{baseUrl}}/",
+      "value": null,
+      "extractName": null,
+      "textContains": null,
+      "risk": "READ_ONLY",
+      "locators": []
+    },
+    {
+      "id": "type-id",
+      "action": "type",
+      "url": null,
+      "value": "{{memberId}}",
+      "extractName": null,
+      "textContains": null,
+      "risk": "REVERSIBLE",
+      "locators": [
+        {
+          "strategy": "css",
+          "role": null,
+          "name": null,
+          "value": "input[name=memberno]"
+        }
+      ]
+    },
+    {
+      "id": "submit",
+      "action": "click",
+      "url": null,
+      "value": null,
+      "extractName": null,
+      "textContains": null,
+      "risk": "REVERSIBLE",
+      "locators": [
+        {
+          "strategy": "role",
+          "role": "button",
+          "name": "Lookup",
+          "value": null
+        },
+        {
+          "strategy": "text",
+          "role": null,
+          "name": null,
+          "value": "Lookup"
+        }
+      ]
+    },
+    {
+      "id": "open-member",
+      "action": "click",
+      "url": null,
+      "value": null,
+      "extractName": null,
+      "textContains": null,
+      "risk": "READ_ONLY",
+      "locators": [
+        {
+          "strategy": "css",
+          "role": null,
+          "name": null,
+          "value": "table a"
+        }
+      ]
+    },
+    {
+      "id": "checkpoint-member",
+      "action": "checkpoint",
+      "url": null,
+      "value": null,
+      "extractName": null,
+      "textContains": "Member record",
+      "risk": "READ_ONLY",
+      "locators": []
+    },
+    {
+      "id": "extract-balance",
+      "action": "extract",
+      "url": null,
+      "value": null,
+      "extractName": "balance",
+      "textContains": null,
+      "risk": "READ_ONLY",
+      "locators": [
+        {
+          "strategy": "css",
+          "role": null,
+          "name": null,
+          "value": "h2 \u002B table tr:nth-child(2) td:nth-child(2)"
+        }
+      ]
+    }
+  ]
+}
