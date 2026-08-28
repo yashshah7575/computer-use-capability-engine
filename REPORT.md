@@ -2,7 +2,7 @@
 
 ## 1. Architecture
 
-Modular monolith (`ComputerUse.Cli` → Discovery, Replay, Policy, Artifacts, Evidence, HITL) plus a separate DemoBank app. `ISurfaceDriver` lives in Domain (no Playwright types); Playwright is the only implemented driver. Replay depends on that interface, not the adapter assembly. No queues. Operator UI is loopback Kestrel on the CLI process (`:5200`); DemoBank is `:5100`. Trade-off: one process is easy to demo; the driver interface keeps desktop/legacy web from leaking into the artifact schema.
+Modular monolith plus a separate DemoBank app. `ComputerUse.Cli` is the composition root (wires `ILanguageModel`, `IReplayEngine`, `ISurfaceDriver`, policy, artifacts, evidence, HITL). `ISurfaceDriver` lives in Domain with no Playwright types; Playwright is the only implemented driver. Replay depends on `IReplayEngine` / `ISurfaceDriver`, not the adapter assembly. Protocol and demo literals (approval, risk, actions, locators, member IDs, ports) are centralized in Domain `Constants`; committed JSON matches those values. Unit tests stub the surface with `FakeSurfaceDriver`; integration tests drive Chromium against DemoBank. No queues. Operator UI is loopback Kestrel on the CLI process (`:5200`); DemoBank is `:5100`. Trade-off: one process is easy to demo; the driver interface keeps desktop/legacy web from leaking into the artifact schema.
 
 ## 2. Artifact schema
 

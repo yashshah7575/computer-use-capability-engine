@@ -10,11 +10,11 @@ Captured during requirements analysis. Source: [requirements.md](../requirements
 | Target | Local DemoBank in-repo; somewhat hostile (no test IDs, table display, awkward markup, optional iframe, confirmation modal) |
 | Primary flow | Look up member by ID, open record, extract current savings balance |
 | Secondary flow | Search → open member → start opening sub-account → confirmation/risky step → HITL |
-| Invocation | CLI (`discover`, `replay`, `hitl`) |
+| Invocation | CLI (`discover`, `replay`, `hitl`, `approve`, `stability`, `capture-demo`) |
 | Artifacts | JSON files on disk (`artifacts/`, copies under `evidence/`) |
 | Risk | READ_ONLY, REVERSIBLE, RISKY, IRREVERSIBLE; RISKY/IRREVERSIBLE not unattended |
 | HITL | Same headed Playwright session; operator page; AUTOMATION → HUMAN → Resume → AUTOMATION |
-| Architecture | Modular monolith + separate DemoBank. No queues/microservices |
+| Architecture | Modular monolith + separate DemoBank. CLI composition root; `ISurfaceDriver` / `IReplayEngine` / `ILanguageModel`; Playwright adapter; Domain `Constants` for protocol literals. No queues/microservices |
 | Tests | Unit + scripted browser replay; live Bedrock gated off by default |
 | Layout | Repo-root `README.md`, `REPORT.md`, `evidence/` |
 | Browser | Headed default; `--headless` opt-in |

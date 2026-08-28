@@ -34,7 +34,7 @@ flowchart TD
   Hitl --> Replay
 ```
 
-`ComputerUse.Cli` hosts discovery, replay, policy, artifacts, evidence, and HITL in one process. DemoBank is a separate app (`:5100`). Operator UI is loopback Kestrel (`:5200`). Replay and discovery depend on `ISurfaceDriver` in Domain; Playwright is an adapter.
+`ComputerUse.Cli` is the composition root: it hosts discovery, replay, policy, artifacts, evidence, and HITL in one process. DemoBank is a separate app (`:5100`). Operator UI is loopback Kestrel (`:5200`). Discovery talks to `ILanguageModel`; replay talks to `IReplayEngine` and `ISurfaceDriver` (Domain). Playwright is the current driver adapter. Protocol strings (approval, risk, actions, member IDs, ports) live in Domain `Constants` — JSON on disk uses the same values.
 
 ## Repository Structure
 
@@ -70,6 +70,14 @@ export AWS_REGION=us-east-1
 ```
 
 Without live AWS: use `--scripted` discovery and `dotnet test`. Replay still needs DemoBank + Chromium.
+
+## Tests
+
+```bash
+dotnet test
+```
+
+Unit tests use an in-memory `FakeSurfaceDriver` (no browser). Integration tests (`[Trait("Category", "Integration")]`) start DemoBank and Playwright Chromium. All tests follow Arrange–Act–Assert with `Method_Scenario_Expected` names.
 
 ## Quick Start / End-to-End Demo
 
