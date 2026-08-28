@@ -2,6 +2,6 @@ namespace ComputerUse.Domain;
 
 public sealed class HumanGateOutcome
 {
-    public bool Granted { get; set; }
+    public HumanGateDecision Decision { get; set; } = HumanGateDecision.Denied;
     public List<HumanAction> Actions { get; set; } = [];
 }

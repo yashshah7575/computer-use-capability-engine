@@ -13,7 +13,7 @@ Captured during requirements analysis. Source: [requirements.md](../requirements
 | Invocation | CLI (`discover`, `replay`, `hitl`, `approve`, `stability`, `capture-demo`) |
 | Artifacts | JSON files on disk (`artifacts/`, copies under `evidence/`) |
 | Risk | READ_ONLY, REVERSIBLE, RISKY, IRREVERSIBLE; RISKY/IRREVERSIBLE not unattended |
-| HITL | Same headed Playwright session; operator page; AUTOMATION → HUMAN → Resume → AUTOMATION |
+| HITL | Same headed Playwright session; operator page; explicit Authorize / Completed / Deny (session clicks are audit only) |
 | Architecture | Modular monolith + separate DemoBank. CLI composition root; `ISurfaceDriver` / `IReplayEngine` / `ILanguageModel`; Playwright adapter; Domain `Constants` for protocol literals. No queues/microservices |
 | Tests | Unit + scripted browser replay; live Bedrock gated off by default |
 | Layout | Repo-root `README.md`, `REPORT.md`, `evidence/` |

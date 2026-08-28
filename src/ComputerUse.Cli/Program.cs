@@ -35,8 +35,6 @@ async Task<int> Discover()
     var goal = Get(args, Constants.Flag.Goal) ?? $"look up member {Constants.Member.Known} and read their current savings balance";
     var url = Get(args, Constants.Flag.Url) ?? Constants.Network.DemoBankUrl;
     var scripted = args.Contains(Constants.Flag.Scripted);
-    var evidence = Path.Combine(repo, Constants.PathName.Evidence, "discovery-" + DateTime.UtcNow.ToString("yyyyMMddHHmmss"));
-    Directory.CreateDirectory(evidence);
     var artifactPath = Path.Combine(repo, Constants.PathName.Artifacts, Constants.ArtifactId.LookupArtifactFile);
     Directory.CreateDirectory(Path.GetDirectoryName(artifactPath)!);
 
@@ -44,18 +42,34 @@ async Task<int> Discover()
     {
         var a = DiscoveryAgent.ScriptedLookup(url);
         await File.WriteAllTextAsync(artifactPath, ArtifactSerializer.Serialize(a));
-        Console.WriteLine($"Wrote scripted artifact {artifactPath}");
+        Console.WriteLine($"Wrote scripted fixture {artifactPath} (not LLM discovery).");
         return 0;
     }
 
+    var runId = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+    var evidence = Path.Combine(repo, Constants.PathName.Evidence, Constants.PathName.Discovery, runId);
+    Directory.CreateDirectory(evidence);
+
     await using var driver = await PlaywrightDriver.LaunchAsync(headless);
+    var member = Get(args, Constants.Flag.MemberId);
     var agent = new DiscoveryAgent(new BedrockLanguageModel());
     try
     {
-        var artifact = await agent.DiscoverAsync(goal, url, driver, allowlist, evidence);
+        var context = DiscoveryContext.From(goal, url, member);
+        var artifact = await agent.DiscoverAsync(context, driver, allowlist, evidence);
         await File.WriteAllTextAsync(artifactPath, ArtifactSerializer.Serialize(artifact));
-        await File.WriteAllTextAsync(Path.Combine(evidence, "artifact.json"), ArtifactSerializer.Serialize(artifact));
-        Console.WriteLine($"Discovery complete. Artifact: {artifactPath}");
+        await File.WriteAllTextAsync(Path.Combine(evidence, Constants.PathName.ArtifactJson), ArtifactSerializer.Serialize(artifact));
+        var summary = new ExecutionResult
+        {
+            Kind = ResultKind.Success,
+            Message = "Discovery emitted draft artifact.",
+            EvidenceDir = evidence
+        };
+        await File.WriteAllTextAsync(
+            Path.Combine(evidence, Constants.PathName.Result),
+            JsonSerializer.Serialize(summary, ArtifactSerializer.JsonOptions));
+        Console.WriteLine($"Discovery complete. Draft artifact: {artifactPath}");
+        Console.WriteLine($"Evidence: {evidence}");
         return 0;
     }
     catch (Exception ex)
@@ -95,14 +109,14 @@ async Task<int> Replay()
             var shot = Path.Combine(evidence, "intervention.png");
             await driver.ScreenshotAsync(shot);
             await driver.StartHumanAuditAsync();
-            var actions = await handoff.WaitForHumanAsync(new InterventionRequest
+            var outcome = await handoff.WaitForHumanAsync(new InterventionRequest
             {
                 RunId = Path.GetFileName(evidence),
                 StepId = step.Id,
-                Reason = $"Risk {step.Risk} requires human confirmation.",
+                Reason = $"Risk {step.Risk} requires an explicit human decision.",
                 ScreenshotPath = shot
             }, driver.PeekHumanAuditAsync);
-            return new HumanGateOutcome { Granted = true, Actions = actions.ToList() };
+            return outcome;
         }
     });
 

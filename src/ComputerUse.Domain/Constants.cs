@@ -131,6 +131,30 @@ public static class Constants
         public const string Tool = "tool";
         public const string Css = "css";
         public const string Text = "text";
+        public const string Value = "value";
+        public const string Parameter = "parameter";
+        public const string ExtractName = "extractName";
+        public const string OutputType = "outputType";
+        public const string TextContains = "textContains";
+        public const string Risk = "risk";
+        public const string Role = "role";
+        public const string Name = "name";
+        public const string Placeholder = "placeholder";
+        public const string Url = "url";
+    }
+
+    public static class DiscoveryEvent
+    {
+        public const string RunStarted = "run_started";
+        public const string Observation = "observation";
+        public const string ModelDecision = "model_decision";
+        public const string ActionStarted = "action_started";
+        public const string ActionSucceeded = "action_succeeded";
+        public const string ActionFailed = "action_failed";
+        public const string Checkpoint = "checkpoint";
+        public const string Extract = "extract";
+        public const string ArtifactEmitted = "artifact_emitted";
+        public const string RunCompleted = "run_completed";
     }
 
     public static class Member
@@ -150,6 +174,7 @@ public static class Constants
         public const int TestDemoBankPort = 18510;
         public const int TestOperatorPort = 18765;
         public const int TestOperatorPortAlt = 18766;
+        public const int TestOperatorPortResume = 18767;
         public const int CaptureDemoOperatorPort = 5201;
 
         public static string LoopbackUrl(int port) => $"http://{Loopback}:{port}";
@@ -181,6 +206,9 @@ public static class Constants
         public const string FailureScreenshot = "failure.png";
         public const string Snapshot = "snapshot.txt";
         public const string Result = "result.json";
+        public const string Discovery = "discovery";
+        public const string DiscoveryLog = "discovery.jsonl";
+        public const string ArtifactJson = "artifact.json";
     }
 
     public static class Flag
@@ -218,6 +246,9 @@ public static class Constants
     public static class Route
     {
         public const string Resume = "/resume";
+        public const string Authorize = "/authorize";
+        public const string Completed = "/completed";
+        public const string Deny = "/deny";
         public const string Screenshot = "/screenshot";
         public const string LookupQueryUnknown = "/lookup?memberno=" + Member.Unknown;
         public const string SubAccountQueryKnown = "/subaccount?id=" + Member.Known;

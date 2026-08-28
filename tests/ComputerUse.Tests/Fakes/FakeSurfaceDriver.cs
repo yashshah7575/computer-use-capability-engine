@@ -22,7 +22,13 @@ internal sealed class FakeSurfaceDriver : ISurfaceDriver
     public Task<string> ObserveAsync() =>
         Task.FromResult($"URL={CurrentUrl}\n{PageText}");
 
-    public Task<LocatorMatch> ClickAsync(IReadOnlyList<LocatorSpec> locators) => ActAsync();
+    public int ClickCount { get; private set; }
+
+    public Task<LocatorMatch> ClickAsync(IReadOnlyList<LocatorSpec> locators)
+    {
+        ClickCount++;
+        return ActAsync();
+    }
 
     public Task<LocatorMatch> TypeAsync(IReadOnlyList<LocatorSpec> locators, string text) => ActAsync();
 

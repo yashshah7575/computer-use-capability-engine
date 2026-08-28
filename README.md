@@ -8,33 +8,43 @@ This repository is an [interface.ai](https://interface.ai) take-home vertical sl
 
 ## What This Demonstrates
 
-- **LLM used during discovery, not production replay.** The model explores the UI once. Later invocations follow the saved artifact.
-- **Typed, versioned capability artifacts.** Steps, locators, inputs, and outputs are data — not a model transcript.
+- **LLM used during discovery, not production replay.** The model observes and acts once. Successful actions are recorded into a typed **draft** artifact. Replay never calls the model.
+- **Typed, versioned capability artifacts.** Steps, locators, inputs, and outputs are data — not a model transcript. `knownOutcomes` / recoverable conditions are DemoBank environment policy, not LLM-discovered.
 - **Deterministic replay.** No LLM in the replay loop: parameter substitution, allowlist checks, locator fallbacks (logged as `degradations` when a lower tier wins), checkpoints.
 - **Business outcomes vs system failures.** Declared `knownOutcomes` on the artifact (e.g. `MEMBER_NOT_FOUND`) are `BusinessOutcome`. A locator miss is `HardFailure`.
 - **Recoverable interruptions.** A known interstitial (DemoBank member **88888**) is dismissed and replayed; the result is `Recoverable` with outputs.
 - **Approval gating.** Live discovery writes `draft`. RISKY/IRREVERSIBLE replay requires `approved` unless `--allow-draft`.
 - **Explicit policy/safety.** Host/port/path/action allowlists; risk classes; RISKY/IRREVERSIBLE steps do not run unattended.
-- **Evidence.** Screenshots, structured `result.json`, and run folders under `/evidence`. `stability` replays N times and writes a pass-rate report.
-- **Human-in-the-loop.** Automation pauses on the same headed browser; an operator page on `:5200` shows the screenshot. Resume is refused (HTTP 409) until the human acts on the live session. Human actions are recorded on the result.
+- **Evidence.** Screenshots, structured `result.json`, and run folders under `/evidence`. Live discovery writes `evidence/discovery/<run-id>/`. `stability` replays N times and writes a pass-rate report.
+- **Human-in-the-loop.** Automation pauses on the same headed browser. The operator page on `:5200` requires an explicit decision: authorize automation, mark the step completed by human, or deny. A stray click on the bank window is audit only — it does not authorize the risky action.
 - **Surface abstraction.** `ISurfaceDriver` is the perceive/act seam. Playwright is the current driver; the artifact schema is not Playwright-specific.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-  Goal[Goal] --> Discovery[Discovery Agent + LLM]
+  Goal[Natural-language goal] --> Discovery[Discovery Agent + LLM]
   Discovery --> Driver[Surface Driver]
-  Driver --> Artifact[Capability Artifact]
-  Artifact --> Replay[Deterministic Replay]
-  Replay --> Result[Structured Result]
-  Policy[Policy allowlist] -.-> Replay
-  Evidence[Evidence] -.-> Replay
-  Replay -->|stuck or risky| Hitl[HITL handoff]
+  Driver --> Recorder[Record successful actions]
+  Recorder --> Draft[Draft capability artifact]
+  Draft --> Approve[Review / approve]
+  Approve --> Replay[Deterministic replay]
+  Replay --> Result[Structured result]
+  Policy[Policy allowlist] -.-> Discovery
+  Policy -.-> Replay
+  Evidence[Evidence] -.-> Discovery
+  Evidence -.-> Replay
+  Replay -->|risky or irreversible| Hitl[Explicit HITL decision]
   Hitl --> Replay
 ```
 
+**Discovery path:** natural-language goal → LLM observes and acts on DemoBank → successful actions are recorded → typed **draft** artifact is emitted → review/approve.
+
+**Production path:** caller → approved capability artifact → deterministic replay (no LLM) → structured result.
+
 `ComputerUse.Cli` is the composition root: it hosts discovery, replay, policy, artifacts, evidence, and HITL in one process. DemoBank is a separate app (`:5100`). Operator UI is loopback Kestrel (`:5200`). Discovery talks to `ILanguageModel`; replay talks to `IReplayEngine` and `ISurfaceDriver` (Domain). Playwright is the current driver adapter. Protocol strings (approval, risk, actions, member IDs, ports) live in Domain `Constants` — JSON on disk uses the same values.
+
+Live discovery requires Amazon Bedrock. `--scripted` writes a deterministic fixture for offline tests/demos; it does **not** prove LLM discovery.
 
 ## Repository Structure
 
@@ -64,7 +74,6 @@ pwsh tests/ComputerUse.Tests/bin/Debug/net8.0/playwright.ps1 install chromium
 - **Amazon Bedrock** only for live discovery (optional). Credentials stay in your environment — never in the repo.
 
 ```bash
-export LLM_PROVIDER=bedrock
 export BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
 export AWS_REGION=us-east-1
 ```
@@ -99,23 +108,31 @@ dotnet run --project src/DemoBank
 
 Leave this running.
 
-### 3. Run LLM discovery (optional)
+### 3. Discovery
 
-Scripted (no LLM, writes `artifacts/lookup-savings-balance.json`):
+**Scripted fixture** (no LLM; offline tests/demos only):
 
 ```bash
 dotnet run --project src/ComputerUse.Cli -- discover --scripted
 ```
 
-Live Bedrock:
+Writes `artifacts/lookup-savings-balance.json`. This is a reference artifact, not evidence that the model discovered the flow.
+
+**Live Bedrock discovery** (requires DemoBank running and AWS credentials in the environment — never committed):
 
 ```bash
+export BEDROCK_MODEL_ID=amazon.nova-lite-v1:0
+export AWS_REGION=us-east-1
+
 dotnet run --project src/ComputerUse.Cli -- discover \
-  --goal "look up member 12345 and read their current savings balance" \
-  --url http://127.0.0.1:5100
+  --goal "Look up member 12345 and return the current savings balance" \
+  --url http://127.0.0.1:5100 \
+  --member-id 12345
 ```
 
-A committed artifact already exists, so you can skip this and go straight to replay.
+Expected: a **draft** artifact whose steps match the actions the model actually took, plus evidence under `evidence/discovery/<run-id>/` (`discovery.jsonl`, `obs-*.txt`, `artifact.json`, `result.json`). Inspect that directory, sanitize if needed, then commit it if you want a genuine discovery run in the repo. No Bedrock run is committed by default.
+
+A previously committed lookup artifact still exists for replay demos; replace it with the draft from live discovery after you review it, then `approve` if you will replay RISKY steps.
 
 ### 4. Replay the saved capability (no LLM)
 
@@ -164,8 +181,8 @@ dotnet run --project src/ComputerUse.Cli -- hitl --url http://127.0.0.1:5100
 
 1. Headed Chromium stays on DemoBank (confirm page).
 2. Open http://127.0.0.1:5200 (operator page — includes a screenshot).
-3. Click or type **at least once** in the bank window (empty resume is refused).
-4. Click **Resume automation**.
+3. Choose one explicit action: **Authorize automation to perform this step**, **I completed the step**, or **Deny / stop**.
+4. Clicks in the bank window are audited; they do not by themselves authorize the irreversible action.
 
 ![Operator HITL page](evidence/handoff/08-operator-hitl.png)
 

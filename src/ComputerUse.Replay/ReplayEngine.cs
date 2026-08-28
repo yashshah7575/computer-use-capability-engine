@@ -96,18 +96,40 @@ public sealed class ReplayEngine : IReplayEngine
 
                         var gate = await onHumanGate(step);
                         humanActions.AddRange(gate.Actions);
-                        if (!gate.Granted)
+                        if (gate.Decision == HumanGateDecision.Denied)
                         {
                             return Attach(new ExecutionResult
                             {
                                 Kind = ResultKind.InterventionRequired,
                                 StepId = step.Id,
-                                Message = $"Step {step.Id} is {step.Risk} and requires a human."
+                                Message = $"Step {step.Id} denied by human."
                             });
                         }
 
-                        if (step.Locators.Count > 0 && !await surface.CanResolveAsync(step.Locators))
+                        if (gate.Decision == HumanGateDecision.CompletedByHuman)
+                        {
+                            if (!await HumanCompletionVerifiedAsync(artifact, step, surface))
+                            {
+                                return Attach(new ExecutionResult
+                                {
+                                    Kind = ResultKind.InterventionRequired,
+                                    StepId = step.Id,
+                                    Message = $"Step {step.Id} marked completed by human but completion could not be verified."
+                                });
+                            }
+
                             break;
+                        }
+
+                        if (gate.Decision != HumanGateDecision.AuthorizeAutomation)
+                        {
+                            return Attach(new ExecutionResult
+                            {
+                                Kind = ResultKind.InterventionRequired,
+                                StepId = step.Id,
+                                Message = $"Step {step.Id} has no explicit human authorization."
+                            });
+                        }
                     }
 
                     await MaybeRecoverAsync(artifact, surface, step, recoveryEvents, recoveryUses);
@@ -232,6 +254,34 @@ public sealed class ReplayEngine : IReplayEngine
 
     public static StabilityReport Summarize(IReadOnlyList<ExecutionResult> results) =>
         StabilityReport.From(results);
+
+    private static async Task<bool> HumanCompletionVerifiedAsync(
+        CapabilityArtifact artifact,
+        ArtifactStep step,
+        ISurfaceDriver surface)
+    {
+        if (step.Locators.Count > 0 && !await surface.CanResolveAsync(step.Locators))
+            return true;
+
+        var seen = false;
+        foreach (var candidate in artifact.Steps)
+        {
+            if (!seen)
+            {
+                if (ReferenceEquals(candidate, step))
+                    seen = true;
+                continue;
+            }
+
+            if (candidate.Action == Constants.Action.Checkpoint &&
+                !string.IsNullOrEmpty(candidate.TextContains) &&
+                await surface.PageContainsAsync(candidate.TextContains))
+                return true;
+            break;
+        }
+
+        return false;
+    }
 
     private static void RecordMatch(List<Degradation> degradations, string stepId, LocatorMatch match)
     {

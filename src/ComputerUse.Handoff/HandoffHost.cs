@@ -4,12 +4,11 @@ namespace ComputerUse.Handoff;
 
 public sealed class HandoffHost : IAsyncDisposable
 {
-    private TaskCompletionSource _resume = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource<HumanGateOutcome> _resume = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private WebApplication? _app;
     private Func<Task<IReadOnlyList<HumanAction>>>? _peekActions;
-    private bool _requireHumanAction;
     private string? _resumeMessage;
-    private List<HumanAction> _acceptedActions = [];
+    private HumanGateOutcome _accepted = new();
 
     public InterventionRequest? Current { get; private set; }
     public ControllerKind Controller { get; private set; } = ControllerKind.Automation;
@@ -30,7 +29,7 @@ public sealed class HandoffHost : IAsyncDisposable
             ctx.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
             await next();
         });
-        _app.MapGet("/", () => Results.Content(Html(), "text/html"));
+        _app.MapGet("/", async () => Results.Content(await HtmlAsync(), "text/html"));
         _app.MapGet(Constants.Route.Screenshot, () =>
         {
             var path = Current?.ScreenshotPath;
@@ -38,23 +37,9 @@ public sealed class HandoffHost : IAsyncDisposable
                 return Results.NotFound();
             return Results.File(path, "image/png");
         });
-        _app.MapPost(Constants.Route.Resume, async () =>
-        {
-            IReadOnlyList<HumanAction> actions = [];
-            if (_peekActions is not null)
-                actions = await _peekActions();
-            if (_requireHumanAction && actions.Count == 0)
-            {
-                _resumeMessage = "Resume refused: no human action on the live session yet. Use the DemoBank window, then try again.";
-                return Results.Content(Html(), "text/html", statusCode: 409);
-            }
-
-            _acceptedActions = actions.ToList();
-            _resumeMessage = null;
-            Controller = ControllerKind.Automation;
-            _resume.TrySetResult();
-            return Results.Redirect("/");
-        });
+        _app.MapPost(Constants.Route.Authorize, () => CompleteAsync(HumanGateDecision.AuthorizeAutomation));
+        _app.MapPost(Constants.Route.Completed, () => CompleteAsync(HumanGateDecision.CompletedByHuman));
+        _app.MapPost(Constants.Route.Deny, () => CompleteAsync(HumanGateDecision.Denied));
         await _app.StartAsync();
     }
 
@@ -64,24 +49,35 @@ public sealed class HandoffHost : IAsyncDisposable
         Controller = ControllerKind.Human;
     }
 
-    public async Task<IReadOnlyList<HumanAction>> WaitForHumanAsync(
+    public async Task<HumanGateOutcome> WaitForHumanAsync(
         InterventionRequest req,
         Func<Task<IReadOnlyList<HumanAction>>> peekActions)
     {
         Current = req;
         Controller = ControllerKind.Human;
         _peekActions = peekActions;
-        _requireHumanAction = true;
         _resumeMessage = null;
-        _acceptedActions = [];
-        _resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        Console.WriteLine($"HITL: {req.Reason}  Open {Constants.Network.LoopbackUrl(_port)} then use the headed browser and press Resume.");
-        await _resume.Task;
-        _requireHumanAction = false;
-        return _acceptedActions;
+        _accepted = new HumanGateOutcome();
+        _resume = new TaskCompletionSource<HumanGateOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Console.WriteLine($"HITL: {req.Reason}  Open {Constants.Network.LoopbackUrl(_port)} and choose Authorize, Completed, or Deny.");
+        var outcome = await _resume.Task;
+        return outcome;
     }
 
-    private string Html()
+    private async Task<IResult> CompleteAsync(HumanGateDecision decision)
+    {
+        IReadOnlyList<HumanAction> actions = [];
+        if (_peekActions is not null)
+            actions = await _peekActions();
+        _accepted = new HumanGateOutcome { Decision = decision, Actions = actions.ToList() };
+        _resumeMessage = null;
+        if (decision != HumanGateDecision.Denied)
+            Controller = ControllerKind.Automation;
+        _resume.TrySetResult(_accepted);
+        return Results.Redirect("/");
+    }
+
+    private async Task<string> HtmlAsync()
     {
         var r = Current;
         var shot = r?.ScreenshotPath is { } p && File.Exists(p)
@@ -90,6 +86,16 @@ public sealed class HandoffHost : IAsyncDisposable
         var refused = string.IsNullOrEmpty(_resumeMessage)
             ? ""
             : $"<p><strong>{_resumeMessage}</strong></p>";
+        IReadOnlyList<HumanAction> live = [];
+        if (_peekActions is not null)
+        {
+            try { live = await _peekActions(); }
+            catch { live = []; }
+        }
+
+        var audit = live.Count == 0
+            ? "<p>No live-session actions captured yet (audit only; they do not authorize the step).</p>"
+            : "<ul>" + string.Join("", live.Select(a => $"<li>{a.Kind}: {a.Detail}</li>")) + "</ul>";
         return $"""
             <!doctype html><html><head><meta charset="utf-8"><title>Operator</title></head>
             <body>
@@ -100,8 +106,11 @@ public sealed class HandoffHost : IAsyncDisposable
             <p>Reason: {r?.Reason}</p>
             {refused}
             {shot}
-            <p>Use the already-open DemoBank browser window (click or type at least once), then:</p>
-            <form method="post" action="{Constants.Route.Resume}"><button type="submit">Resume automation</button></form>
+            <p>Use the already-open DemoBank browser if you will complete the step yourself. Then choose one explicit decision:</p>
+            {audit}
+            <form method="post" action="{Constants.Route.Authorize}"><button type="submit">Authorize automation to perform this step</button></form>
+            <form method="post" action="{Constants.Route.Completed}"><button type="submit">I completed the step</button></form>
+            <form method="post" action="{Constants.Route.Deny}"><button type="submit">Deny / stop</button></form>
             </body></html>
             """;
     }
